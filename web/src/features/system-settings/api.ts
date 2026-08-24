@@ -41,6 +41,15 @@ export async function updateSystemOption(request: UpdateOptionRequest) {
   return res.data
 }
 
+export async function updateFrontend() {
+  const res = await api.post<UpdateOptionResponse>(
+    '/api/frontend/update',
+    undefined,
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
 export async function confirmPaymentCompliance() {
   const res = await api.post<ConfirmPaymentComplianceResponse>(
     '/api/option/payment_compliance',

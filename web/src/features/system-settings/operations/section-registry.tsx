@@ -25,6 +25,7 @@ import { PerformanceSection } from '../maintenance/performance-section'
 import { UpdateCheckerSection } from '../maintenance/update-checker-section'
 import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { FrontendSettingsSection } from './frontend-settings-section'
 
 const OPERATIONS_SECTIONS = [
   {
@@ -124,6 +125,16 @@ const OPERATIONS_SECTIONS = [
           'performance_setting.monitor_disk_threshold':
             settings['performance_setting.monitor_disk_threshold'] ?? 95,
         }}
+      />
+    ),
+  },
+  {
+    id: 'frontend',
+    titleKey: 'Frontend',
+    build: (settings: OperationsSettings) => (
+      <FrontendSettingsSection
+        defaultDownloadUrl={settings['frontend_setting.download_url'] ?? ''}
+        defaultDownloadProxy={settings['frontend_setting.download_proxy'] ?? ''}
       />
     ),
   },
