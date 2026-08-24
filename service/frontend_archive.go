@@ -78,7 +78,7 @@ func extractFrontendTar(reader io.Reader, destination string) error {
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return fmt.Errorf("创建前端父目录失败: %w", err)
 			}
-			output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_EXCL, sanitizedFileMode(header.Mode()))
+			output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_EXCL, sanitizedFileMode(header.Mode))
 			if err != nil {
 				return fmt.Errorf("创建前端文件失败: %w", err)
 			}

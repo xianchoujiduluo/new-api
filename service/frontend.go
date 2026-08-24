@@ -231,7 +231,8 @@ func (u *FrontendUpdater) download(ctx context.Context, rawURL string) (string, 
 }
 
 func activateFrontendDirectory(current, next string) error {
-	if info, err := os.Lstat(current); err == nil {
+	info, err := os.Lstat(current)
+	if err == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 			return fmt.Errorf("当前前端目录不是安全目录")
 		}
