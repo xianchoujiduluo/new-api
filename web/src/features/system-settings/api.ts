@@ -20,6 +20,10 @@ import { api } from '@/lib/api'
 
 import type {
   ConfirmPaymentComplianceResponse,
+  BackendCheckResult,
+  BackendUpdateResponse,
+  BackendUpdateResult,
+  BackendUpdateStatus,
   FetchUpstreamRatiosRequest,
   LogCleanupTask,
   SystemOptionsResponse,
@@ -44,6 +48,41 @@ export async function updateSystemOption(request: UpdateOptionRequest) {
 export async function updateFrontend() {
   const res = await api.post<UpdateOptionResponse>(
     '/api/frontend/update',
+    undefined,
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+export async function getBackendUpdateStatus() {
+  const res = await api.get<BackendUpdateResponse<BackendUpdateStatus>>(
+    '/api/backend-update/status',
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+export async function checkBackendUpdate() {
+  const res = await api.post<BackendUpdateResponse<BackendCheckResult>>(
+    '/api/backend-update/check',
+    undefined,
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+export async function applyBackendUpdate() {
+  const res = await api.post<BackendUpdateResponse<BackendUpdateResult>>(
+    '/api/backend-update/apply',
+    undefined,
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+export async function rollbackBackendUpdate() {
+  const res = await api.post<BackendUpdateResponse<BackendUpdateResult>>(
+    '/api/backend-update/rollback',
     undefined,
     { skipBusinessError: true }
   )

@@ -208,6 +208,14 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			frontendRoute.POST("/update", controller.UpdateFrontend)
 		}
+		backendRoute := apiRouter.Group("/backend-update")
+		backendRoute.Use(middleware.RootAuth())
+		{
+			backendRoute.GET("/status", controller.GetBackendUpdateStatus)
+			backendRoute.POST("/check", controller.CheckBackendUpdate)
+			backendRoute.POST("/apply", controller.ApplyBackendUpdate)
+			backendRoute.POST("/rollback", controller.RollbackBackendUpdate)
+		}
 
 		// Custom OAuth provider management (root only)
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")

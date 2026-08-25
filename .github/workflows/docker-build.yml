@@ -53,8 +53,10 @@ jobs:
           else
             TAG=${GITHUB_REF#refs/tags/}
           fi
+          BUILD_COMMIT=$(git rev-parse HEAD)
           echo "TAG=${TAG}" >> $GITHUB_ENV
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "commit=${BUILD_COMMIT}" >> $GITHUB_OUTPUT
           echo "${TAG}" > VERSION
           echo "Building tag: ${TAG} for ${{ matrix.arch }}"
 
@@ -79,6 +81,8 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
+          build-args: |
+            BUILD_COMMIT=${{ steps.version.outputs.commit }}
           push: true
           tags: |
             dx95/new-api:${{ env.TAG }}-${{ matrix.arch }}

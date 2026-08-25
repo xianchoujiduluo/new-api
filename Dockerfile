@@ -12,6 +12,7 @@ ENV GO111MODULE=on CGO_ENABLED=0 GOWORK=off
 
 ARG TARGETOS
 ARG TARGETARCH
+ARG BUILD_COMMIT=unknown
 ENV GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64}
 ENV GOEXPERIMENT=greenteagc
 
@@ -25,7 +26,10 @@ RUN go mod download
 
 COPY . .
 COPY --from=builder /build/web/dist ./web/dist
-RUN go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=$(cat VERSION)'" -o new-api
+RUN BUILD_VERSION=$(cat VERSION) \
+    && if [ -z "$BUILD_VERSION" ]; then BUILD_VERSION=v0.0.0; fi \
+    && go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=$BUILD_VERSION' -X 'github.com/QuantumNous/new-api/common.BuildVersion=$BUILD_VERSION' -X 'github.com/QuantumNous/new-api/common.BuildCommit=$BUILD_COMMIT'" -o new-api \
+    && go build -trimpath -ldflags "-s -w" -o new-api-launcher ./cmd/backend-launcher
 
 FROM debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a
 
@@ -34,8 +38,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && update-ca-certificates
 
-COPY --from=builder2 /build/new-api /
+COPY --from=builder2 /build/new-api /usr/local/lib/new-api/new-api
+COPY --from=builder2 /build/new-api-launcher /usr/local/bin/new-api-launcher
 COPY LICENSE NOTICE THIRD-PARTY-LICENSES.md /licenses/
+RUN ln -s /usr/local/lib/new-api/new-api /new-api
 EXPOSE 3000
 WORKDIR /data
-ENTRYPOINT ["/new-api"]
+ENTRYPOINT ["/usr/local/bin/new-api-launcher"]

@@ -1,0 +1,224 @@
+name: Publish backend release
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.github/workflows/frontend-release.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: backend-release
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect backend changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      backend: ${{ steps.detect.outputs.backend }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 2
+      - name: Detect backend paths
+        id: detect
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo 'backend=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          backend=false
+          while IFS= read -r path; do
+            case "$path" in
+              web/*|docs/*|*.md|.github/workflows/frontend-release.yml) ;;
+              *) backend=true; break ;;
+            esac
+          done < <(git diff --name-only "${{ github.event.before }}" "$GITHUB_SHA")
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Build, sign, and publish backend
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release identity
+        shell: bash
+        run: |
+          BUILD_VERSION=$(tr -d '\r\n[:space:]' < VERSION | sed -E 's/[^A-Za-z0-9._+-]+/-/g')
+          BUILD_VERSION=${BUILD_VERSION:0:128}
+          if [[ ! "$BUILD_VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$ ]]; then
+            echo "::error::Unable to derive a valid backend version"
+            exit 1
+          fi
+          echo "BUILD_VERSION=$BUILD_VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_COMMIT=$GITHUB_SHA" >> "$GITHUB_ENV"
+
+      - name: Wait for matching frontend release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet "${{ github.event.before }}" "$GITHUB_SHA" -- web; then
+            exit 0
+          fi
+          for attempt in {1..60}; do
+            result=$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow frontend-release.yml \
+              --commit "$GITHUB_SHA" \
+              --event push \
+              --limit 1 \
+              --json status,conclusion \
+              --jq '.[0] | select(.status == "completed") | .conclusion' 2>/dev/null || true)
+            if [[ "$result" == "success" ]]; then
+              exit 0
+            fi
+            if [[ -n "$result" ]]; then
+              echo "::error::Matching frontend release failed: $result"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo '::error::Timed out waiting for the matching frontend release'
+          exit 1
+
+      - name: Download embedded frontend fallback
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p web/dist
+          gh release download latestFront \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern frontend-latest.tar.gz \
+            --clobber
+          tar -xzf frontend-latest.tar.gz -C web/dist
+          test -f web/dist/index.html
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.26.1'
+
+      - name: Derive trusted public key
+        env:
+          BACKEND_UPDATE_SIGNING_KEY: ${{ secrets.BACKEND_UPDATE_SIGNING_KEY }}
+        run: |
+          BACKEND_PUBLIC_KEY=$(go run ./cmd/backend-release-sign public-key)
+          if [[ "$BACKEND_PUBLIC_KEY" != '8DxuvAeXP2JBMlFhIk1LKwItiAVygCCDe8sCMMeBTDU=' ]]; then
+            echo '::error::Backend signing key does not match the trusted updater key'
+            exit 1
+          fi
+
+      - name: Build Linux backends
+        env:
+          CGO_ENABLED: '0'
+          GOEXPERIMENT: greenteagc
+        run: |
+          go mod download
+          LDFLAGS="-s -w -X github.com/QuantumNous/new-api/common.Version=$BUILD_VERSION -X github.com/QuantumNous/new-api/common.BuildVersion=$BUILD_VERSION -X github.com/QuantumNous/new-api/common.BuildCommit=$BUILD_COMMIT"
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o new-api-linux-amd64
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o new-api-linux-arm64
+          if [ "$(./new-api-linux-amd64 --version)" != "$BUILD_VERSION" ]; then
+            echo "::error::Built backend version does not match the release manifest"
+            exit 1
+          fi
+
+      - name: Generate signed manifest
+        env:
+          BACKEND_UPDATE_SIGNING_KEY: ${{ secrets.BACKEND_UPDATE_SIGNING_KEY }}
+        run: |
+          AMD64_SHA256=$(sha256sum new-api-linux-amd64 | cut -d ' ' -f 1)
+          ARM64_SHA256=$(sha256sum new-api-linux-arm64 | cut -d ' ' -f 1)
+          AMD64_SIZE=$(stat -c '%s' new-api-linux-amd64)
+          ARM64_SIZE=$(stat -c '%s' new-api-linux-arm64)
+          PUBLISHED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          jq -n \
+            --arg version "$BUILD_VERSION" \
+            --arg commit "$BUILD_COMMIT" \
+            --arg published_at "$PUBLISHED_AT" \
+            --arg amd64_sha256 "$AMD64_SHA256" \
+            --arg arm64_sha256 "$ARM64_SHA256" \
+            --argjson amd64_size "$AMD64_SIZE" \
+            --argjson arm64_size "$ARM64_SIZE" \
+            '{
+              schema_version: 1,
+              version: $version,
+              commit: $commit,
+              published_at: $published_at,
+              artifacts: {
+                "linux-amd64": {
+                  os: "linux",
+                  arch: "amd64",
+                  url: "new-api-linux-amd64",
+                  sha256: $amd64_sha256,
+                  size: $amd64_size
+                },
+                "linux-arm64": {
+                  os: "linux",
+                  arch: "arm64",
+                  url: "new-api-linux-arm64",
+                  sha256: $arm64_sha256,
+                  size: $arm64_size
+                }
+              }
+            }' > backend-manifest.json
+          go run ./cmd/backend-release-sign sign backend-manifest.json
+
+      - name: Publish latest backend release
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        with:
+          tag_name: latestBackend
+          name: Latest backend
+          target_commitish: ${{ github.sha }}
+          files: |
+            new-api-linux-amd64
+            new-api-linux-arm64
+            backend-manifest.json
+            backend-manifest.json.sig
+          overwrite_files: true
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    name: Email workflow result
+    needs: [changes, release]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send workflow result email
+        uses: dawidd6/action-send-mail@v6
+        with:
+          server_address: ${{ vars.SMTP_HOST }}
+          server_port: ${{ vars.SMTP_PORT }}
+          secure: true
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          from: ${{ secrets.SMTP_FROM }}
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          subject: "[${{ github.repository }}] ${{ github.workflow }} result"
+          body: |
+            Repository: ${{ github.repository }}
+            Workflow: ${{ github.workflow }}
+            Ref: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Backend release: ${{ needs.release.result }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

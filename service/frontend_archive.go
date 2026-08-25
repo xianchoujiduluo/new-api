@@ -58,7 +58,7 @@ func extractFrontendTar(reader io.Reader, destination string) error {
 		if err != nil {
 			return fmt.Errorf("读取前端 tar 归档失败: %w", err)
 		}
-		target, err := safeArchivePath(destination, header.Name)
+		target, err := safeArchivePath(destination, header.Name, header.Typeflag == tar.TypeDir)
 		if err != nil {
 			return err
 		}
@@ -110,7 +110,7 @@ func extractFrontendZip(archivePath, destination string) error {
 	var total int64
 	files := 0
 	for _, entry := range archive.File {
-		target, err := safeArchivePath(destination, entry.Name)
+		target, err := safeArchivePath(destination, entry.Name, entry.FileInfo().IsDir())
 		if err != nil {
 			return err
 		}
@@ -153,7 +153,7 @@ func extractFrontendZip(archivePath, destination string) error {
 	return nil
 }
 
-func safeArchivePath(root, name string) (string, error) {
+func safeArchivePath(root, name string, isDir bool) (string, error) {
 	if strings.TrimSpace(name) == "" || strings.ContainsRune(name, 0) || strings.Contains(name, "\\") {
 		return "", fmt.Errorf("前端归档包含不安全路径: %q", name)
 	}
@@ -162,6 +162,9 @@ func safeArchivePath(root, name string) (string, error) {
 		return "", fmt.Errorf("前端归档包含绝对路径: %q", name)
 	}
 	clean := path.Clean(name)
+	if clean == "." && isDir && strings.TrimRight(name, "/") == "." {
+		return filepath.Clean(root), nil
+	}
 	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
 		return "", fmt.Errorf("前端归档包含路径穿越: %q", name)
 	}

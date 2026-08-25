@@ -185,6 +185,11 @@ func (u *FrontendUpdater) download(ctx context.Context, rawURL string) (string, 
 			}
 		}
 	}
+	if client != nil {
+		strictClient := *client
+		strictClient.CheckRedirect = checkProtectedFetchRedirect
+		client = &strictClient
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("创建前端下载请求失败: %w", err)

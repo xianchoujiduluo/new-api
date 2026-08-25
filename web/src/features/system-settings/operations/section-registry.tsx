@@ -26,6 +26,7 @@ import { UpdateCheckerSection } from '../maintenance/update-checker-section'
 import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 import { FrontendSettingsSection } from './frontend-settings-section'
+import { BackendSettingsSection } from './backend-settings-section'
 
 const OPERATIONS_SECTIONS = [
   {
@@ -135,6 +136,16 @@ const OPERATIONS_SECTIONS = [
       <FrontendSettingsSection
         defaultDownloadUrl={settings['frontend_setting.download_url'] ?? ''}
         defaultDownloadProxy={settings['frontend_setting.download_proxy'] ?? ''}
+      />
+    ),
+  },
+  {
+    id: 'backend',
+    titleKey: 'Backend updates',
+    build: (settings: OperationsSettings) => (
+      <BackendSettingsSection
+        defaultManifestUrl={settings['backend_setting.manifest_url'] ?? ''}
+        defaultDownloadProxy={settings['backend_setting.download_proxy'] ?? ''}
       />
     ),
   },

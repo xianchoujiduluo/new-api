@@ -42,7 +42,15 @@ jobs:
         run: bun run build
 
       - name: Package frontend assets
-        run: tar -czf ../frontend-latest.tar.gz -C dist .
+        run: |
+          cd dist
+          shopt -s dotglob nullglob
+          files=(*)
+          if (( ${#files[@]} == 0 )); then
+            echo 'Frontend build output is empty'
+            exit 1
+          fi
+          tar -czf ../../frontend-latest.tar.gz -- "${files[@]}"
 
       - name: Publish latest frontend release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1

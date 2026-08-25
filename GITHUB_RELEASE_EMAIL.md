@@ -10,6 +10,7 @@ Workflow 的全部发布 job，无论发布成功、失败或部分任务被跳�
 - Docker 镜像及多架构清单发布
 - Linux、macOS、Windows 和 Electron Release
 - 前端 `latestFront` Release
+- 后端 `latestBackend` Release（含签名清单和 Linux `amd64`/`arm64` 二进制）
 - GitCode Release 同步
 
 `ci.yml` 和 `pr-check.yml` 不产生发布产物，因此不发送发布邮件。
@@ -33,6 +34,7 @@ Workflow 的全部发布 job，无论发布成功、失败或部分任务被跳�
 | `SMTP_PASSWORD` | SMTP password or provider app password |
 | `SMTP_FROM` | Sender address, normally the authenticated Gmail address |
 | `NOTIFY_EMAIL_TO` | Recipient address; multiple addresses may be comma-separated if supported by the action |
+| `BACKEND_UPDATE_SIGNING_KEY` | Ed25519 私钥（PKCS#8 PEM 或 Base64），仅供 `latestBackend` 清单签名使用 |
 
 `GITHUB_TOKEN` is automatically provided by GitHub Actions and does not need to be created manually.
 
@@ -70,6 +72,11 @@ notify:
 对于本项目的前端发布，通知位于 `.github/workflows/frontend-release.yml`，并等待
 `release` job。仅配置 Variables 和 Secrets 不会自动发送邮件；新增发布 Workflow 时，
 仍须添加自己的通知 job，并在 `needs` 中列出全部发布 job。
+
+后端独立发布位于 `.github/workflows/backend-release.yml`。其签名私钥只保存在
+`BACKEND_UPDATE_SIGNING_KEY` Secret 中；运行时镜像内置对应公钥，禁止把私钥写入仓库、
+镜像或系统设置。只有需要切换信任根时，才通过容器环境变量
+`BACKEND_UPDATE_PUBLIC_KEY` 覆盖内置公钥。
 
 ## 验证
 

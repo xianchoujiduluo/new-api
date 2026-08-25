@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/backend_setting"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/frontend_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -207,6 +208,12 @@ func SyncOptions(frequency int) {
 }
 
 func validateOptionValue(key string, value string) error {
+	if key == backend_setting.ManifestURLOptionKey {
+		return backend_setting.ValidateManifestURL(value)
+	}
+	if key == backend_setting.DownloadProxyOptionKey {
+		return backend_setting.ValidateDownloadProxy(value)
+	}
 	if key == frontend_setting.DownloadURLOptionKey {
 		return frontend_setting.ValidateDownloadURL(value)
 	}

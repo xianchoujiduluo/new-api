@@ -99,6 +99,12 @@ func tarGzArchive(t *testing.T, files map[string]string) []byte {
 	var buffer bytes.Buffer
 	gzipWriter := gzip.NewWriter(&buffer)
 	tarWriter := tar.NewWriter(gzipWriter)
+	// Match archives produced by `tar -C dist .`, which include a safe `./` root entry.
+	require.NoError(t, tarWriter.WriteHeader(&tar.Header{
+		Name:     "./",
+		Mode:     0755,
+		Typeflag: tar.TypeDir,
+	}))
 	for name, content := range files {
 		data := []byte(content)
 		require.NoError(t, tarWriter.WriteHeader(&tar.Header{

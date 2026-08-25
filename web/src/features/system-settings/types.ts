@@ -39,6 +39,37 @@ export type UpdateOptionResponse = {
   message: string
 }
 
+export type BackendUpdateStatus = {
+  supported: boolean
+  supervised: boolean
+  current_version: string
+  current_commit: string
+  pending_version?: string
+  previous_version?: string
+  restart_required: boolean
+  can_rollback: boolean
+}
+
+export type BackendCheckResult = {
+  current_version: string
+  latest_version: string
+  latest_commit: string
+  published_at?: string
+  update_available: boolean
+}
+
+export type BackendUpdateResult = {
+  version: string
+  commit: string
+  changed: boolean
+}
+
+export type BackendUpdateResponse<T> = {
+  success: boolean
+  message: string
+  data?: T
+}
+
 export type ConfirmPaymentComplianceResponse = {
   success: boolean
   message: string
@@ -364,6 +395,8 @@ export type OperationsSettings = {
   'performance_setting.monitor_disk_threshold': number
   'frontend_setting.download_url': string
   'frontend_setting.download_proxy': string
+  'backend_setting.manifest_url': string
+  'backend_setting.download_proxy': string
   'perf_metrics_setting.enabled': boolean
   'perf_metrics_setting.flush_interval': number
   'perf_metrics_setting.bucket_time': 'hour' | 'minute' | '5min'

@@ -54,6 +54,8 @@ const defaultOperationsSettings: OperationsSettings = {
   'performance_setting.monitor_disk_threshold': 95,
   'frontend_setting.download_url': '',
   'frontend_setting.download_proxy': '',
+  'backend_setting.manifest_url': '',
+  'backend_setting.download_proxy': '',
   'perf_metrics_setting.enabled': true,
   'perf_metrics_setting.flush_interval': 5,
   'perf_metrics_setting.bucket_time': 'hour',

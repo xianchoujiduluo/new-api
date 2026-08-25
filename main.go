@@ -221,8 +221,13 @@ func main() {
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-quit
-	common.SysLog(fmt.Sprintf("received signal: %v, shutting down...", sig))
+	select {
+	case sig := <-quit:
+		common.SysLog(fmt.Sprintf("received signal: %v, shutting down...", sig))
+	case <-service.ProcessRestartRequests():
+		common.SysLog("backend update staged, shutting down for restart...")
+	}
+	signal.Stop(quit)
 
 	// SSE streams may run for minutes; give them time to finish before forced exit
 	shutdownTimeout := time.Duration(common.GetEnvOrDefault("SHUTDOWN_TIMEOUT_SECONDS", 120)) * time.Second

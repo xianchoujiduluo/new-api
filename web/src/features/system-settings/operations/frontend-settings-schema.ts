@@ -32,7 +32,7 @@ function isOptionalURL(value: string, protocols: Set<string>) {
   }
 }
 
-function isOptionalProxyURL(value: string) {
+export function isOptionalProxyURL(value: string) {
   const trimmed = value.trim()
   if (!isOptionalURL(trimmed, PROXY_PROTOCOLS)) return false
   if (!trimmed) return true
@@ -51,7 +51,7 @@ function isOptionalProxyURL(value: string) {
   )
 }
 
-function isOptionalDownloadURL(value: string) {
+export function isOptionalDownloadURL(value: string) {
   const trimmed = value.trim()
   if (!isOptionalURL(trimmed, DOWNLOAD_PROTOCOLS)) return false
   if (!trimmed) return true

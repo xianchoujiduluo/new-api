@@ -38,7 +38,11 @@ func InitEnv() {
 	}
 
 	if *PrintVersion {
-		fmt.Println(Version)
+		buildVersion := BuildVersion
+		if buildVersion == "" || buildVersion == "v0.0.0" {
+			buildVersion = Version
+		}
+		fmt.Println(buildVersion)
 		os.Exit(0)
 	}
 
