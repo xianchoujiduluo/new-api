@@ -303,16 +303,18 @@ export function MultiSelect(props: MultiSelectProps) {
     event: React.KeyboardEvent<HTMLDivElement>
   ) => {
     if (event.target !== event.currentTarget) return
-    if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'ArrowDown') {
+    if (
+      event.key !== 'Enter' &&
+      event.key !== ' ' &&
+      event.key !== 'ArrowDown'
+    ) {
       return
     }
     event.preventDefault()
     setOpen(true)
   }
 
-  const handlePopupTriggerClick = (
-    event: React.MouseEvent<HTMLDivElement>
-  ) => {
+  const handlePopupTriggerClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest('button')) return
     handleOpenChange(!open)
   }
