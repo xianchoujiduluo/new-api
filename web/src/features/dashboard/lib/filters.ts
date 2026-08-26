@@ -20,6 +20,7 @@ import {
   DASHBOARD_CHART_PREFERENCES_STORAGE_KEY,
   DEFAULT_DASHBOARD_CHART_PREFERENCES,
   DEFAULT_TIME_GRANULARITY,
+  DASHBOARD_FILTER_TIME_RANGE_PRESETS,
   EMPTY_DASHBOARD_FILTERS,
   TIME_GRANULARITY_STORAGE_KEY,
   TIME_RANGE_PRESETS,
@@ -29,9 +30,58 @@ import type {
   ConsumptionDistributionChartType,
   DashboardChartPreferences,
   DashboardFilters,
+  DashboardTimeRangePresetKey,
   ModelAnalyticsChartTab,
 } from '@/features/dashboard/types'
-import { getRollingDateRange, type TimeGranularity } from '@/lib/time'
+import {
+  getEndOfDay,
+  getRollingDateRange,
+  getStartOfDay,
+  type TimeGranularity,
+} from '@/lib/time'
+
+type DashboardFilterTimeRangePreset =
+  (typeof DASHBOARD_FILTER_TIME_RANGE_PRESETS)[number]
+
+export function getDashboardPresetDateRange(
+  preset: DashboardFilterTimeRangePreset,
+  fromDate: Date = new Date()
+): { start: Date; end: Date } {
+  if ('dayOffset' in preset) {
+    const target = new Date(fromDate)
+    target.setDate(target.getDate() + preset.dayOffset)
+    return { start: getStartOfDay(target), end: getEndOfDay(target) }
+  }
+  return getRollingDateRange(preset.days, fromDate)
+}
+
+export function detectDashboardPresetKey(
+  filters?: DashboardFilters,
+  fromDate: Date = new Date()
+): string | null {
+  const start = filters?.start_timestamp
+  const end = filters?.end_timestamp
+  if (!start || !end) return null
+
+  for (const preset of DASHBOARD_FILTER_TIME_RANGE_PRESETS) {
+    if (!('dayOffset' in preset)) continue
+    const range = getDashboardPresetDateRange(preset, fromDate)
+    if (
+      Math.abs(start.getTime() - range.start.getTime()) < 1000 &&
+      Math.abs(end.getTime() - range.end.getTime()) < 1000
+    ) {
+      return preset.key
+    }
+  }
+
+  const duration = end.getTime() - start.getTime()
+  const rollingPreset = DASHBOARD_FILTER_TIME_RANGE_PRESETS.find(
+    (preset) =>
+      !('dayOffset' in preset) &&
+      Math.abs(duration - preset.days * 86_400_000) < 1000
+  )
+  return rollingPreset?.key ?? null
+}
 
 function isTimeGranularity(value: unknown): value is TimeGranularity {
   return value === 'hour' || value === 'day' || value === 'week'
@@ -57,6 +107,21 @@ function isModelAnalyticsChartTab(
 
 function isTimeRangePresetDays(value: unknown): value is number {
   return TIME_RANGE_PRESETS.some((preset) => preset.days === value)
+}
+
+function isDashboardTimeRangePresetKey(
+  value: unknown
+): value is DashboardTimeRangePresetKey {
+  return DASHBOARD_FILTER_TIME_RANGE_PRESETS.some(
+    (preset) => preset.key === value
+  )
+}
+
+function getRollingPresetKey(days: number): DashboardTimeRangePresetKey {
+  const preset = DASHBOARD_FILTER_TIME_RANGE_PRESETS.find(
+    (option) => !('dayOffset' in option) && option.days === days
+  )
+  return (preset?.key ?? 'last-1') as DashboardTimeRangePresetKey
 }
 
 export function cleanFilters<T extends Record<string, unknown>>(
@@ -104,6 +169,11 @@ export function getSavedChartPreferences(): DashboardChartPreferences {
     if (!raw) return fallbackPreferences
 
     const parsed = JSON.parse(raw) as Partial<DashboardChartPreferences>
+    const defaultTimeRangeDays = isTimeRangePresetDays(
+      parsed.defaultTimeRangeDays
+    )
+      ? parsed.defaultTimeRangeDays
+      : fallbackPreferences.defaultTimeRangeDays
     return {
       consumptionDistributionChart: isConsumptionDistributionChartType(
         parsed.consumptionDistributionChart
@@ -113,9 +183,12 @@ export function getSavedChartPreferences(): DashboardChartPreferences {
       modelAnalyticsChart: isModelAnalyticsChartTab(parsed.modelAnalyticsChart)
         ? parsed.modelAnalyticsChart
         : fallbackPreferences.modelAnalyticsChart,
-      defaultTimeRangeDays: isTimeRangePresetDays(parsed.defaultTimeRangeDays)
-        ? parsed.defaultTimeRangeDays
-        : fallbackPreferences.defaultTimeRangeDays,
+      defaultTimeRangePreset: isDashboardTimeRangePresetKey(
+        parsed.defaultTimeRangePreset
+      )
+        ? parsed.defaultTimeRangePreset
+        : getRollingPresetKey(defaultTimeRangeDays),
+      defaultTimeRangeDays,
       defaultTimeGranularity: isTimeGranularity(parsed.defaultTimeGranularity)
         ? parsed.defaultTimeGranularity
         : fallbackPreferences.defaultTimeGranularity,
@@ -143,7 +216,12 @@ export function getDefaultDays(granularity?: TimeGranularity): number {
 export function buildDefaultDashboardFilters(
   preferences: DashboardChartPreferences = getSavedChartPreferences()
 ): DashboardFilters {
-  const { start, end } = getRollingDateRange(preferences.defaultTimeRangeDays)
+  const preset = DASHBOARD_FILTER_TIME_RANGE_PRESETS.find(
+    (option) => option.key === preferences.defaultTimeRangePreset
+  )
+  const { start, end } = preset
+    ? getDashboardPresetDateRange(preset)
+    : getRollingDateRange(preferences.defaultTimeRangeDays)
   return {
     ...EMPTY_DASHBOARD_FILTERS,
     start_timestamp: start,
@@ -154,16 +232,25 @@ export function buildDefaultDashboardFilters(
 
 export function buildQueryParams(
   timeRange: { start_timestamp: number; end_timestamp: number },
-  filters?: { time_granularity?: TimeGranularity; username?: string }
+  filters?: {
+    time_granularity?: TimeGranularity
+    username?: string
+    channel_ids?: number[]
+    model_names?: string[]
+  }
 ): {
   start_timestamp: number
   end_timestamp: number
   default_time: string
   username?: string
+  channel_ids?: number[]
+  model_names?: string[]
 } {
   return {
     ...timeRange,
     default_time: getSavedGranularity(filters?.time_granularity),
     ...(filters?.username && { username: filters.username }),
+    ...(filters?.channel_ids?.length && { channel_ids: filters.channel_ids }),
+    ...(filters?.model_names?.length && { model_names: filters.model_names }),
   }
 }

@@ -25,6 +25,8 @@ export {
   getSavedChartPreferences,
   saveChartPreferences,
   buildDefaultDashboardFilters,
+  detectDashboardPresetKey,
+  getDashboardPresetDateRange,
 } from './filters'
 export {
   getLatencyColorClass,
@@ -40,5 +42,9 @@ export {
   flowSankeyDatumValue,
   getFlowStages,
 } from './flow'
-export { safeDivide, calculateDashboardStats } from './stats'
+export {
+  safeDivide,
+  calculateDashboardStats,
+  formatDashboardStatNumber,
+} from './stats'
 export { getPreviewText } from './text'

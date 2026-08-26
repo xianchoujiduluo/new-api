@@ -20,12 +20,12 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { IconBadge } from '@/components/ui/icon-badge'
-import { Skeleton } from '@/components/ui/skeleton'
 import { getUserQuotaDates } from '@/features/dashboard/api'
 import { useModelStatCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import {
   buildQueryParams,
   calculateDashboardStats,
+  formatDashboardStatNumber,
   getDefaultDays,
 } from '@/features/dashboard/lib'
 import type {
@@ -33,29 +33,17 @@ import type {
   DashboardFilters,
 } from '@/features/dashboard/types'
 import { toIntlLocale } from '@/i18n/languages'
-import { formatCompactNumber, formatNumber, formatQuota } from '@/lib/format'
+import { formatQuota } from '@/lib/format'
 import { computeTimeRange } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
+import { DashboardStatValue } from './dashboard-stat-value'
+import { TokenStatDetails } from './token-stat-details'
+
 interface LogStatCardsProps {
   filters?: DashboardFilters
   onDataUpdate?: (data: QuotaDataItem[], loading: boolean) => void
-}
-
-const MAX_INLINE_STAT_CHARS = 9
-
-function formatStatNumber(value: number, locale: Intl.LocalesArgument) {
-  const fullValue = formatNumber(value, locale)
-  const displayValue =
-    fullValue.length > MAX_INLINE_STAT_CHARS
-      ? formatCompactNumber(value, locale)
-      : fullValue
-
-  return {
-    displayValue,
-    fullValue,
-  }
 }
 
 export function LogStatCards(props: LogStatCardsProps) {
@@ -67,6 +55,9 @@ export function LogStatCards(props: LogStatCardsProps) {
     totalQuota: number
     totalCount: number
     totalTokens: number
+    inputTokens: number
+    cachedTokens: number
+    reasoningTokens: number
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -130,9 +121,10 @@ export function LogStatCards(props: LogStatCardsProps) {
             displayValue: formatQuota(rawValue),
             fullValue: formatQuota(rawValue),
           }
-        : formatStatNumber(rawValue, locale)
+        : formatDashboardStatNumber(rawValue, locale)
 
     return {
+      key: config.key,
       title: config.title,
       value: formatted.displayValue,
       fullValue: formatted.fullValue,
@@ -144,41 +136,46 @@ export function LogStatCards(props: LogStatCardsProps) {
 
   return (
     <div className='overflow-hidden rounded-lg border'>
-      <div className='divide-border/60 grid min-w-0 grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-5'>
-        {items.map((it, idx) => {
+      <div className='divide-border/60 grid min-w-0 grid-cols-2 divide-x lg:grid-cols-6'>
+        {items.map((it) => {
           const Icon = it.icon
-          let valueContent
-          if (loading) {
-            valueContent = (
-              <div className='mt-1 flex flex-col gap-1 sm:mt-2 sm:gap-1.5'>
-                <Skeleton className='h-5 w-16 sm:h-7 sm:w-20' />
-                <Skeleton className='hidden h-3.5 w-28 md:block' />
+          const headerContent = (
+            <div className='flex min-w-0 items-center gap-1.5 sm:gap-2'>
+              <IconBadge
+                tone={it.iconTone}
+                size='stat'
+                className='size-4 rounded-sm sm:size-7 sm:rounded-md [&>svg]:size-2.5 sm:[&>svg]:size-3.5'
+              >
+                <Icon />
+              </IconBadge>
+              <div className='text-muted-foreground truncate text-[11px] leading-4 font-medium tracking-wide uppercase sm:text-xs sm:tracking-wider'>
+                {it.title}
               </div>
-            )
-          } else if (error) {
+            </div>
+          )
+          let valueContent
+          if (it.key === 'tokens') {
             valueContent = (
-              <>
-                <div className='text-muted-foreground mt-1 font-mono text-base leading-tight font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'>
-                  --
-                </div>
-                <div className='text-muted-foreground/40 mt-1 hidden text-xs md:block'>
-                  {it.desc}
-                </div>
-              </>
+              <TokenStatDetails
+                header={headerContent}
+                totalTokens={stats?.totalTokens ?? 0}
+                inputTokens={stats?.inputTokens ?? 0}
+                cachedTokens={stats?.cachedTokens ?? 0}
+                reasoningTokens={stats?.reasoningTokens ?? 0}
+                locale={toIntlLocale(i18n.resolvedLanguage || i18n.language)}
+                loading={loading}
+                error={error}
+              />
             )
           } else {
             valueContent = (
-              <>
-                <div
-                  className='text-foreground mt-1 max-w-full truncate font-mono text-base leading-tight font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'
-                  title={it.fullValue}
-                >
-                  {it.value}
-                </div>
-                <div className='text-muted-foreground/60 mt-1 hidden text-xs md:block'>
-                  {it.desc}
-                </div>
-              </>
+              <DashboardStatValue
+                value={it.value}
+                fullValue={it.fullValue}
+                description={it.desc}
+                loading={loading}
+                error={error}
+              />
             )
           }
 
@@ -187,25 +184,17 @@ export function LogStatCards(props: LogStatCardsProps) {
               key={it.title}
               className={cn(
                 'min-w-0 px-2.5 py-1.5 sm:px-5 sm:py-4',
-                idx === items.length - 1 &&
-                  items.length % 2 !== 0 &&
-                  'col-span-2 sm:col-span-1'
+                it.key === 'tokens' && 'col-span-2 lg:col-span-2'
               )}
             >
-              <div className='flex min-w-0 items-center gap-1.5 sm:gap-2'>
-                <IconBadge
-                  tone={it.iconTone}
-                  size='stat'
-                  className='size-4 rounded-sm sm:size-7 sm:rounded-md [&>svg]:size-2.5 sm:[&>svg]:size-3.5'
-                >
-                  <Icon />
-                </IconBadge>
-                <div className='text-muted-foreground truncate text-[11px] leading-4 font-medium tracking-wide uppercase sm:text-xs sm:tracking-wider'>
-                  {it.title}
-                </div>
-              </div>
-
-              {valueContent}
+              {it.key === 'tokens' ? (
+                valueContent
+              ) : (
+                <>
+                  {headerContent}
+                  {valueContent}
+                </>
+              )}
             </div>
           )
         })}

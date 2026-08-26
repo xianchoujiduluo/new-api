@@ -54,6 +54,17 @@ web/           — Frontend (React 19, Rsbuild, Base UI, Tailwind)
 
 ## Rules
 
+### 任务范围约束
+
+- 执行任务前必须先明确任务目标、包含范围和排除范围，并以此作为实施边界。
+- 未经用户明确确认，不得扩大或缩小任务范围；发现相关但不在范围内的问题时，应先说明并等待确认。
+- 不得将其他需求、历史遗留改动或无关重构混入当前任务；如确有必要调整范围，必须先重新确认后再修改代码。
+
+### 测试执行约定
+
+- 完成代码修改后，默认不运行测试；由项目维护者自行执行和验证。
+- 只有在用户明确要求时，才运行测试命令，并在结果中说明执行情况。
+
 ### Common Code Quality
 
 - New code should stay direct and readable. Prefer early returns, clear branches, and well-named local variables to deep nesting or layered control flow.

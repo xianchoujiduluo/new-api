@@ -18,7 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { getRouteApi, useNavigate } from '@tanstack/react-router'
 import { Eye, EyeOff } from 'lucide-react'
-import { useState, useCallback, useMemo, lazy, Suspense } from 'react'
+import {
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  lazy,
+  Suspense,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -32,10 +39,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { ROLE } from '@/lib/roles'
+import { dateToUnixTimestamp } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
+import { getDashboardFilterOptions } from './api'
 import { ModelsChartPreferences } from './components/models/models-chart-preferences'
+import { ModelsDashboardFilters } from './components/models/models-dashboard-filters'
 import { ModelsFilter } from './components/models/models-filter-dialog'
 import { OverviewDashboard } from './components/overview/overview-dashboard'
 import { DEFAULT_TIME_GRANULARITY } from './constants'
@@ -55,6 +65,7 @@ import type {
   DashboardChartPreferences,
   DashboardFilters,
   QuotaDataItem,
+  DashboardFilterOptions,
   UserChartsFilters,
 } from './types'
 
@@ -116,14 +127,13 @@ const LazyFlowCharts = lazy(() =>
 function LogStatCardsFallback() {
   return (
     <div className='overflow-hidden rounded-lg border'>
-      <div className='divide-border/60 grid grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-5'>
-        {LOG_STAT_CARD_FALLBACK_KEYS.map((key, index) => (
+      <div className='divide-border/60 grid grid-cols-2 divide-x lg:grid-cols-6'>
+        {LOG_STAT_CARD_FALLBACK_KEYS.map((key) => (
           <div
             key={key}
             className={cn(
               'px-2.5 py-1.5 sm:px-5 sm:py-4',
-              index === LOG_STAT_CARD_FALLBACK_KEYS.length - 1 &&
-                'col-span-2 sm:col-span-1'
+              key === 'tokens' && 'col-span-2 lg:col-span-2'
             )}
           >
             <div className='flex items-center gap-1.5 sm:gap-2'>
@@ -200,6 +210,10 @@ export function Dashboard() {
     DASHBOARD_DEFAULT_SECTION) as DashboardSectionId
 
   const [modelData, setModelData] = useState<QuotaDataItem[]>([])
+  const [filterOptions, setFilterOptions] = useState<DashboardFilterOptions>({
+    channels: [],
+    models: [],
+  })
   const [dataLoading, setDataLoading] = useState(false)
   const [chartPreferences, setChartPreferences] =
     useState<DashboardChartPreferences>(() => getSavedChartPreferences())
@@ -230,6 +244,38 @@ export function Dashboard() {
     (data: QuotaDataItem[], loading: boolean) => {
       setModelData(data)
       setDataLoading(loading)
+      if (data.length === 0) return
+      setFilterOptions((previous) => {
+        const channels = new Map(
+          previous.channels.map((option) => [option.value, option])
+        )
+        const models = new Map(
+          previous.models.map((option) => [option.value, option])
+        )
+        for (const item of data) {
+          if (item.channel_id && item.channel_id > 0) {
+            const value = String(item.channel_id)
+            channels.set(value, {
+              value,
+              label: item.channel_name || `channel-${item.channel_id}`,
+            })
+          }
+          if (item.model_name) {
+            models.set(item.model_name, {
+              value: item.model_name,
+              label: item.model_name,
+            })
+          }
+        }
+        return {
+          channels: [...channels.values()].sort((a, b) =>
+            a.label.localeCompare(b.label)
+          ),
+          models: [...models.values()].sort((a, b) =>
+            a.label.localeCompare(b.label)
+          ),
+        }
+      })
     },
     []
   )
@@ -245,6 +291,38 @@ export function Dashboard() {
 
   const meta = SECTION_META[activeSection] ?? SECTION_META.overview
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
+
+  useEffect(() => {
+    let active = true
+    setFilterOptions({ channels: [], models: [] })
+    const startTimestamp = modelFilters.start_timestamp
+      ? dateToUnixTimestamp(modelFilters.start_timestamp)
+      : undefined
+    const endTimestamp = modelFilters.end_timestamp
+      ? dateToUnixTimestamp(modelFilters.end_timestamp)
+      : undefined
+    if (startTimestamp === undefined || endTimestamp === undefined) {
+      return () => {
+        active = false
+      }
+    }
+    void getDashboardFilterOptions(
+      { start_timestamp: startTimestamp, end_timestamp: endTimestamp },
+      isAdmin
+    )
+      .then((response) => {
+        if (active && response.success && response.data) {
+          setFilterOptions(response.data)
+        }
+      })
+      .catch(() => {
+        // Keep the chart-data-derived options as a fallback for older backends.
+      })
+    return () => {
+      active = false
+    }
+  }, [isAdmin, modelFilters.start_timestamp, modelFilters.end_timestamp])
+
   const visibleSections = useMemo(
     () =>
       DASHBOARD_SECTION_IDS.filter(
@@ -265,18 +343,10 @@ export function Dashboard() {
     activeSection !== 'overview' && visibleSections.length > 1
   const modelActions =
     activeSection === 'models' ? (
-      <>
-        <ModelsChartPreferences
-          preferences={chartPreferences}
-          onPreferencesChange={handleChartPreferencesChange}
-        />
-        <ModelsFilter
-          preferences={chartPreferences}
-          currentFilters={modelFilters}
-          onFilterChange={handleFilterChange}
-          onReset={handleResetFilters}
-        />
-      </>
+      <ModelsChartPreferences
+        preferences={chartPreferences}
+        onPreferencesChange={handleChartPreferencesChange}
+      />
     ) : null
   const flowActions =
     activeSection === 'flow' ? (
@@ -347,6 +417,14 @@ export function Dashboard() {
           {activeSection === 'overview' && <OverviewDashboard />}
           {activeSection === 'models' && (
             <>
+              <FadeIn>
+                <ModelsDashboardFilters
+                  preferences={chartPreferences}
+                  filters={modelFilters}
+                  options={filterOptions}
+                  onChange={handleFilterChange}
+                />
+              </FadeIn>
               <FadeIn>
                 <Suspense fallback={<LogStatCardsFallback />}>
                   <LazyLogStatCards

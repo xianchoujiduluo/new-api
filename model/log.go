@@ -68,6 +68,7 @@ type Log struct {
 	Quota             int    `json:"quota" gorm:"default:0"`
 	PromptTokens      int    `json:"prompt_tokens" gorm:"default:0"`
 	CompletionTokens  int    `json:"completion_tokens" gorm:"default:0"`
+	ReasoningTokens   int    `json:"reasoning_tokens" gorm:"default:0"`
 	UseTime           int    `json:"use_time" gorm:"default:0"`
 	IsStream          bool   `json:"is_stream"`
 	ChannelId         int    `json:"channel" gorm:"index"`
@@ -329,6 +330,9 @@ type RecordConsumeLogParams struct {
 	ChannelId        int                    `json:"channel_id"`
 	PromptTokens     int                    `json:"prompt_tokens"`
 	CompletionTokens int                    `json:"completion_tokens"`
+	InputTokens      int                    `json:"input_tokens"`
+	CachedTokens     int                    `json:"cached_tokens"`
+	ReasoningTokens  int                    `json:"reasoning_tokens"`
 	ModelName        string                 `json:"model_name"`
 	TokenName        string                 `json:"token_name"`
 	Quota            int                    `json:"quota"`
@@ -365,6 +369,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		Content:          params.Content,
 		PromptTokens:     params.PromptTokens,
 		CompletionTokens: params.CompletionTokens,
+		ReasoningTokens:  max(params.ReasoningTokens, 0),
 		TokenName:        params.TokenName,
 		ModelName:        params.ModelName,
 		Quota:            params.Quota,
@@ -389,16 +394,19 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	}
 	if common.DataExportEnabled {
 		LogQuotaData(QuotaDataLogParams{
-			UserID:    userId,
-			Username:  username,
-			ModelName: params.ModelName,
-			Quota:     params.Quota,
-			CreatedAt: createdAt,
-			TokenUsed: params.PromptTokens + params.CompletionTokens,
-			UseGroup:  params.Group,
-			TokenID:   params.TokenId,
-			ChannelID: params.ChannelId,
-			NodeName:  common.NodeName,
+			UserID:          userId,
+			Username:        username,
+			ModelName:       params.ModelName,
+			Quota:           params.Quota,
+			CreatedAt:       createdAt,
+			TokenUsed:       params.PromptTokens + params.CompletionTokens,
+			InputTokens:     max(params.InputTokens, 0),
+			CachedTokens:    max(params.CachedTokens, 0),
+			ReasoningTokens: max(params.ReasoningTokens, 0),
+			UseGroup:        params.Group,
+			TokenID:         params.TokenId,
+			ChannelID:       params.ChannelId,
+			NodeName:        common.NodeName,
 		})
 	}
 }

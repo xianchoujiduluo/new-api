@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { api } from '@/lib/api'
 
 import type {
+  DashboardFilterOptions,
   FlowQuotaDataItem,
   QuotaDataItem,
   UptimeGroupResult,
@@ -40,6 +41,8 @@ export async function getUserQuotaDates(
     end_timestamp: number
     default_time?: string
     username?: string
+    channel_ids?: number[]
+    model_names?: string[]
   },
   isAdmin = false
 ) {
@@ -48,6 +51,18 @@ export async function getUserQuotaDates(
     endpoint,
     { params }
   )
+  return res.data
+}
+
+export async function getDashboardFilterOptions(
+  params: { start_timestamp: number; end_timestamp: number },
+  isAdmin = false
+) {
+  const endpoint = isAdmin ? '/api/data/options' : '/api/data/self/options'
+  const res = await api.get<{
+    success: boolean
+    data: DashboardFilterOptions
+  }>(endpoint, { params, skipErrorHandler: true })
   return res.data
 }
 
@@ -72,6 +87,8 @@ export async function getFlowQuotaDates(
     end_timestamp: number
     default_time?: string
     username?: string
+    channel_ids?: number[]
+    model_names?: string[]
   },
   isAdmin = false
 ) {

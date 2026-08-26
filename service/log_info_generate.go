@@ -248,6 +248,13 @@ func appendFinalRequestFormat(relayInfo *relaycommon.RelayInfo, other map[string
 func GenerateWssOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.RealtimeUsage, modelRatio, groupRatio, completionRatio, audioRatio, audioCompletionRatio, modelPrice, userGroupRatio float64) map[string]interface{} {
 	info := GenerateTextOtherInfo(ctx, relayInfo, modelRatio, groupRatio, completionRatio, 0, 0.0, modelPrice, userGroupRatio)
 	info["ws"] = true
+	info["input_tokens_total"] = usage.InputTokens
+	if usage.InputTokenDetails.CachedTokens > 0 {
+		info["cache_tokens"] = usage.InputTokenDetails.CachedTokens
+	}
+	if usage.OutputTokenDetails.ReasoningTokens > 0 {
+		info["reasoning_tokens"] = usage.OutputTokenDetails.ReasoningTokens
+	}
 	info["audio_input"] = usage.InputTokenDetails.AudioTokens
 	info["audio_output"] = usage.OutputTokenDetails.AudioTokens
 	info["text_input"] = usage.InputTokenDetails.TextTokens
@@ -260,6 +267,13 @@ func GenerateWssOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 func GenerateAudioOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, modelRatio, groupRatio, completionRatio, audioRatio, audioCompletionRatio, modelPrice, userGroupRatio float64) map[string]interface{} {
 	info := GenerateTextOtherInfo(ctx, relayInfo, modelRatio, groupRatio, completionRatio, 0, 0.0, modelPrice, userGroupRatio)
 	info["audio"] = true
+	info["input_tokens_total"] = usage.PromptTokens
+	if usage.PromptTokensDetails.CachedTokens > 0 {
+		info["cache_tokens"] = usage.PromptTokensDetails.CachedTokens
+	}
+	if usage.CompletionTokenDetails.ReasoningTokens > 0 {
+		info["reasoning_tokens"] = usage.CompletionTokenDetails.ReasoningTokens
+	}
 	info["audio_input"] = usage.PromptTokensDetails.AudioTokens
 	info["audio_output"] = usage.CompletionTokenDetails.AudioTokens
 	info["text_input"] = usage.PromptTokensDetails.TextTokens

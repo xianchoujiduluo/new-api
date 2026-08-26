@@ -17,6 +17,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { QuotaDataItem } from '@/features/dashboard/types'
+import { formatCompactNumber, formatNumber } from '@/lib/format'
+
+const MAX_INLINE_STAT_CHARS = 9
+
+export function formatDashboardStatNumber(
+  value: number,
+  locale: Intl.LocalesArgument
+) {
+  const fullValue = formatNumber(value, locale)
+  return {
+    displayValue:
+      fullValue.length > MAX_INLINE_STAT_CHARS
+        ? formatCompactNumber(value, locale)
+        : fullValue,
+    fullValue,
+  }
+}
 
 /**
  * Safe division: handles NaN and Infinity cases
@@ -27,7 +44,7 @@ export function safeDivide(
   precision: number = 3
 ): number {
   const result = value / divisor
-  if (isNaN(result) || !isFinite(result)) return 0
+  if (Number.isNaN(result) || !Number.isFinite(result)) return 0
   const factor = Math.pow(10, precision)
   return Math.round(result * factor) / factor
 }
@@ -41,7 +58,18 @@ export function calculateDashboardStats(data: QuotaDataItem[]) {
       totalQuota: acc.totalQuota + (Number(item.quota) || 0),
       totalCount: acc.totalCount + (Number(item.count) || 0),
       totalTokens: acc.totalTokens + (Number(item.token_used) || 0),
+      inputTokens: acc.inputTokens + (Number(item.input_tokens) || 0),
+      cachedTokens: acc.cachedTokens + (Number(item.cached_tokens) || 0),
+      reasoningTokens:
+        acc.reasoningTokens + (Number(item.reasoning_tokens) || 0),
     }),
-    { totalQuota: 0, totalCount: 0, totalTokens: 0 }
+    {
+      totalQuota: 0,
+      totalCount: 0,
+      totalTokens: 0,
+      inputTokens: 0,
+      cachedTokens: 0,
+      reasoningTokens: 0,
+    }
   )
 }
