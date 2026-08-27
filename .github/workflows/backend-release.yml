@@ -30,22 +30,25 @@ jobs:
       - name: Check out
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Detect backend paths
         id: detect
         shell: bash
         run: |
+          set -euo pipefail
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo 'backend=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          changed_paths=$(git diff --name-only "${{ github.event.before }}" "$GITHUB_SHA")
           backend=false
           while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
             case "$path" in
               web/*|docs/*|*.md|.github/workflows/frontend-release.yml) ;;
               *) backend=true; break ;;
             esac
-          done < <(git diff --name-only "${{ github.event.before }}" "$GITHUB_SHA")
+          done <<< "$changed_paths"
           echo "backend=$backend" >> "$GITHUB_OUTPUT"
 
   release:
