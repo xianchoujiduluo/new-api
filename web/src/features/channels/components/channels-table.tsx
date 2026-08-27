@@ -333,6 +333,7 @@ export function ChannelsTable() {
     onGlobalFilterChange,
     getRowId: getChannelTableRowId,
     getSubRows: (row: Channel & { children?: Channel[] }) => row.children,
+    initialExpanded: enableTagMode ? true : {},
     manualPagination: true,
     manualSorting: true,
     manualFiltering: true,
@@ -340,6 +341,10 @@ export function ChannelsTable() {
     enableColumnResizing: !isMobile,
     ensurePageInRange,
   })
+
+  useEffect(() => {
+    table.setExpanded(enableTagMode ? true : {})
+  }, [enableTagMode, table])
 
   useEffect(() => {
     if (!batchMode) {

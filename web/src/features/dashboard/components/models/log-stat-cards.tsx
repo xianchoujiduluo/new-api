@@ -44,6 +44,7 @@ import { TokenStatDetails } from './token-stat-details'
 interface LogStatCardsProps {
   filters?: DashboardFilters
   onDataUpdate?: (data: QuotaDataItem[], loading: boolean) => void
+  refreshKey?: number
 }
 
 export function LogStatCards(props: LogStatCardsProps) {
@@ -64,7 +65,7 @@ export function LogStatCards(props: LogStatCardsProps) {
 
   const [timeRangeMinutes, setTimeRangeMinutes] = useState(0)
 
-  const { filters, onDataUpdate } = props
+  const { filters, onDataUpdate, refreshKey } = props
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -104,7 +105,7 @@ export function LogStatCards(props: LogStatCardsProps) {
     return () => {
       abortController.abort()
     }
-  }, [filters, isAdmin, onDataUpdate])
+  }, [filters, isAdmin, onDataUpdate, refreshKey])
 
   const adaptedStats = {
     rpm: stats?.totalCount ?? 0,

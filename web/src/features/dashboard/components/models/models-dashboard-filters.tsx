@@ -20,12 +20,10 @@ import {
 import { Label } from '@/components/ui/label'
 import { DASHBOARD_FILTER_TIME_RANGE_PRESETS } from '@/features/dashboard/constants'
 import {
-  buildDefaultDashboardFilters,
   detectDashboardPresetKey,
   getDashboardPresetDateRange,
 } from '@/features/dashboard/lib'
 import type {
-  DashboardChartPreferences,
   DashboardFilterOptions,
   DashboardFilters,
 } from '@/features/dashboard/types'
@@ -33,10 +31,10 @@ import { CompactDateTimeRangePicker } from '@/features/usage-logs/components/com
 import { cn } from '@/lib/utils'
 
 interface ModelsDashboardFiltersProps {
-  preferences: DashboardChartPreferences
   filters: DashboardFilters
   options: DashboardFilterOptions
   onChange: (filters: DashboardFilters) => void
+  onRefresh: () => void
 }
 
 function granularityForRange(days: number) {
@@ -65,10 +63,6 @@ export function ModelsDashboardFilters(props: ModelsDashboardFiltersProps) {
     })
   }
 
-  const resetFilters = () => {
-    props.onChange(buildDefaultDashboardFilters(props.preferences))
-  }
-
   return (
     <Collapsible
       open={open}
@@ -93,8 +87,9 @@ export function ModelsDashboardFilters(props: ModelsDashboardFiltersProps) {
             type='button'
             variant='ghost'
             size='icon'
-            onClick={resetFilters}
-            aria-label={t('Reset')}
+            onClick={props.onRefresh}
+            aria-label={t('Refresh')}
+            title={t('Refresh')}
             className='text-muted-foreground size-7'
           >
             <RotateCcw className='size-3.5' />

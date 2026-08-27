@@ -214,6 +214,7 @@ export function Dashboard() {
     channels: [],
     models: [],
   })
+  const [dataRefreshKey, setDataRefreshKey] = useState(0)
   const [dataLoading, setDataLoading] = useState(false)
   const [chartPreferences, setChartPreferences] =
     useState<DashboardChartPreferences>(() => getSavedChartPreferences())
@@ -234,6 +235,10 @@ export function Dashboard() {
 
   const handleFilterChange = useCallback((filters: DashboardFilters) => {
     setModelFilters(filters)
+  }, [])
+
+  const handleDataRefresh = useCallback(() => {
+    setDataRefreshKey((current) => current + 1)
   }, [])
 
   const handleResetFilters = useCallback(() => {
@@ -321,7 +326,12 @@ export function Dashboard() {
     return () => {
       active = false
     }
-  }, [isAdmin, modelFilters.start_timestamp, modelFilters.end_timestamp])
+  }, [
+    dataRefreshKey,
+    isAdmin,
+    modelFilters.start_timestamp,
+    modelFilters.end_timestamp,
+  ])
 
   const visibleSections = useMemo(
     () =>
@@ -419,10 +429,10 @@ export function Dashboard() {
             <>
               <FadeIn>
                 <ModelsDashboardFilters
-                  preferences={chartPreferences}
                   filters={modelFilters}
                   options={filterOptions}
                   onChange={handleFilterChange}
+                  onRefresh={handleDataRefresh}
                 />
               </FadeIn>
               <FadeIn>
@@ -430,6 +440,7 @@ export function Dashboard() {
                   <LazyLogStatCards
                     filters={modelFilters}
                     onDataUpdate={handleDataUpdate}
+                    refreshKey={dataRefreshKey}
                   />
                 </Suspense>
               </FadeIn>
