@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import type {
   ColumnFiltersState,
@@ -25,7 +25,13 @@ import type {
   Row,
 } from '@tanstack/react-table'
 import { Eye, EyeOff } from 'lucide-react'
-import { useState, useMemo, useEffect } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -59,6 +65,7 @@ import {
   isTagAggregateRow,
   getChannelTypeIcon,
   getChannelTypeLabel,
+  handleToggleChannelStatus,
 } from '../lib'
 import type { Channel, ChannelSortBy } from '../types'
 import { ChannelCard } from './channel-card'
@@ -97,6 +104,32 @@ export function ChannelsTable() {
     setSensitiveVisible,
   } = useChannels()
   const isMobile = useMediaQuery('(max-width: 640px)')
+  const queryClient = useQueryClient()
+
+  const handleChannelRowDoubleClick = useCallback(
+    (row: Row<Channel>, event: MouseEvent<HTMLElement>) => {
+      if (isTagAggregateRow(row.original)) {
+        return
+      }
+
+      const target = event.target
+      if (
+        target instanceof Element &&
+        target.closest(
+          'button, a, input, textarea, select, [role="button"], [role="menuitem"]'
+        )
+      ) {
+        return
+      }
+
+      void handleToggleChannelStatus(
+        row.original.id,
+        row.original.status,
+        queryClient
+      )
+    },
+    [queryClient]
+  )
 
   // Table state
   const [sorting, setSorting] = useState<SortingState>([])
@@ -496,6 +529,7 @@ export function ChannelsTable() {
         }
         return DISABLED_ROW_DESKTOP
       }}
+      onRowDoubleClick={handleChannelRowDoubleClick}
       bulkActions={batchMode ? <DataTableBulkActions table={table} /> : null}
     />
   )

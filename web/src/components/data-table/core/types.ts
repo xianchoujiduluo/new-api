@@ -53,6 +53,10 @@ export type DataTableViewProps<TData> = {
     helpers: DataTableRenderRowHelpers
   ) => React.ReactNode
   getRowClassName?: (row: Row<TData>) => string | undefined
+  onRowDoubleClick?: (
+    row: Row<TData>,
+    event: React.MouseEvent<HTMLElement>
+  ) => void
   getColumnClassName?: DataTableColumnClassName
   pinnedColumns?: DataTablePinnedColumn[]
   applyHeaderSize?: boolean

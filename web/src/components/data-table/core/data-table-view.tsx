@@ -326,6 +326,11 @@ function renderDefaultRow<TData>(
       className={cn(props.tableBodyRowClassName, props.getRowClassName?.(row))}
       getColumnClassName={getColumnClassName}
       cellRenderColumns={props.table.options.columns}
+      onDoubleClick={
+        props.onRowDoubleClick
+          ? (event) => props.onRowDoubleClick?.(row, event)
+          : undefined
+      }
     />
   )
 }

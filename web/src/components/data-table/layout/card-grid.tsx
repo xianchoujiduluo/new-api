@@ -73,6 +73,10 @@ export interface DataTableCardGridProps<TData> {
   emptyIcon?: React.ReactNode
   getRowKey?: (row: Row<TData>) => string | number
   getRowClassName?: (row: Row<TData>) => string | undefined
+  onRowDoubleClick?: (
+    row: Row<TData>,
+    event: React.MouseEvent<HTMLElement>
+  ) => void
   /**
    * Custom card renderer. When omitted, cards render generically from the
    * column definitions via {@link CardRowContent} (driven by column meta).
@@ -188,6 +192,11 @@ export function DataTableCardGrid<TData>(props: DataTableCardGridProps<TData>) {
               'rounded-lg border bg-(--data-table-card-bg,var(--table-row)) px-3 py-2.5 transition-[background-color,border-color] duration-150 data-[state=selected]:[--data-table-card-bg:color-mix(in_oklch,var(--primary)_7%,var(--table-row))] data-[state=selected]:border-primary/40',
               props.getRowClassName?.(row)
             )}
+            onDoubleClick={
+              props.onRowDoubleClick
+                ? (event) => props.onRowDoubleClick?.(row, event)
+                : undefined
+            }
           >
             {props.renderCard ? (
               props.renderCard(row, { compact, isSelected })

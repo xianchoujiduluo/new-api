@@ -59,6 +59,10 @@ interface MobileCardListProps<TData> {
   emptyDescription?: string
   getRowKey?: (row: Row<TData>) => string | number
   getRowClassName?: (row: Row<TData>) => string | undefined
+  onRowDoubleClick?: (
+    row: Row<TData>,
+    event: React.MouseEvent<HTMLElement>
+  ) => void
 }
 
 function ListSkeleton() {
@@ -167,6 +171,11 @@ export function MobileCardList<TData>(props: MobileCardListProps<TData>) {
               '[background-color:var(--data-table-card-bg,var(--table-row))] px-3 py-2.5',
               getRowClassName?.(row)
             )}
+            onDoubleClick={
+              props.onRowDoubleClick
+                ? (event) => props.onRowDoubleClick?.(row, event)
+                : undefined
+            }
           >
             <CardRowContent row={row} compact={hasCompactMeta} />
           </div>

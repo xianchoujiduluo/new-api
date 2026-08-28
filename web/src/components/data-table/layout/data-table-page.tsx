@@ -164,6 +164,14 @@ export type DataTablePageProps<TData> = {
   ) => string | undefined
 
   /**
+   * Optional shortcut invoked when a rendered row/card is double-clicked.
+   */
+  onRowDoubleClick?: (
+    row: Row<TData>,
+    event: React.MouseEvent<HTMLElement>
+  ) => void
+
+  /**
    * Custom desktop row renderer — replaces the default `<TableRow>`/`<TableCell>` mapping.
    * Use for expanded rows, aggregate rows, click-on-row navigation, etc.
    */
@@ -443,6 +451,7 @@ function renderMobile<TData>(
           getRowClassName={(row) =>
             props.getRowClassName?.(row, { isMobile: false })
           }
+          onRowDoubleClick={props.onRowDoubleClick}
         />
       )
     } else if (cardViewActive) {
@@ -458,6 +467,7 @@ function renderMobile<TData>(
           skeletonKeyPrefix={props.skeletonKeyPrefix}
           getRowKey={props.mobileProps?.getRowKey}
           getRowClassName={mobileGetRowClassName}
+          onRowDoubleClick={props.onRowDoubleClick}
         />
       )
     } else {
@@ -469,6 +479,7 @@ function renderMobile<TData>(
           emptyDescription={props.emptyDescription}
           getRowKey={props.mobileProps?.getRowKey}
           getRowClassName={mobileGetRowClassName}
+          onRowDoubleClick={props.onRowDoubleClick}
         />
       )
     }
@@ -511,6 +522,7 @@ function renderDesktop<TData>(
           getRowClassName={(row) =>
             props.getRowClassName?.(row, { isMobile: false })
           }
+          onRowDoubleClick={props.onRowDoubleClick}
         />
       </div>
     )
@@ -544,6 +556,7 @@ function renderDesktop<TData>(
       getRowClassName={(row) =>
         props.getRowClassName?.(row, { isMobile: false })
       }
+      onRowDoubleClick={props.onRowDoubleClick}
     />
   )
 }
