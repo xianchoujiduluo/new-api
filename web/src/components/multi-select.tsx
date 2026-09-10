@@ -316,7 +316,10 @@ export function MultiSelect(props: MultiSelectProps) {
 
   const handlePopupTriggerClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest('button')) return
-    handleOpenChange(!open)
+    // Base UI may open the popup while the trigger receives focus before this
+    // click bubbles. Only request an open here; toggling can immediately close
+    // it again when the controlled state is one render behind.
+    handleOpenChange(true)
   }
 
   const selectedValues = (
