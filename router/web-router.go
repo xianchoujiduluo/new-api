@@ -102,7 +102,7 @@ func (f *frontendFileSystem) externalPath(requestPath string) (string, bool) {
 	return full, true
 }
 
-func SetWebRouter(router *gin.Engine, assets WebAssets) {
+func SetWebRouter(router *gin.Engine, assets WebAssets, pluginDispatchers ...gin.HandlerFunc) {
 	embeddedFS := common.EmbedFolder(assets.BuildFS, "web/dist")
 	frontendRoot := assets.FrontendDir
 	if strings.TrimSpace(frontendRoot) == "" {
@@ -113,11 +113,16 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 		embedded:     embeddedFS,
 	}
 
-	router.Use(gzip.Gzip(gzip.DefaultCompression))
-	router.Use(middleware.GlobalWebRateLimit())
-	router.Use(middleware.Cache())
-	router.Use(static.Serve("/", frontendFS))
-	router.NoRoute(func(c *gin.Context) {
+	noRouteHandlers := make([]gin.HandlerFunc, 0, 7)
+	noRouteHandlers = append(noRouteHandlers, pluginDispatchers...)
+	noRouteHandlers = append(noRouteHandlers,
+		middleware.RouteTag("web"),
+		gzip.Gzip(gzip.DefaultCompression),
+		middleware.AccessTokenAudit(),
+		middleware.GlobalWebRateLimit(),
+		middleware.Cache(),
+		static.Serve("/", frontendFS),
+		func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")
 		if strings.HasPrefix(c.Request.RequestURI, "/v1") || strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/assets") {
 			controller.RelayNotFound(c)
@@ -133,5 +138,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 			}
 		}
 		c.Data(http.StatusOK, "text/html; charset=utf-8", indexPage)
-	})
+		},
+	)
+	router.NoRoute(noRouteHandlers...)
 }
