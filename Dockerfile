@@ -33,9 +33,12 @@ RUN BUILD_VERSION=$(cat VERSION) \
 
 FROM debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a
 
+# WireGuard userspace tooling: hosts without the kernel module (for example
+# CentOS 7) need wireguard-go for wg-quick's userspace fallback, and openresolv
+# provides resolvconf without the debconf postinst that fails during builds.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tzdata libasan8 wget \
-       wireguard-tools wireguard-go iproute2 resolvconf \
+       wireguard-tools wireguard-go iproute2 openresolv \
     && rm -rf /var/lib/apt/lists/* \
     && update-ca-certificates
 
