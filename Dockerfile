@@ -35,6 +35,7 @@ FROM debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tzdata libasan8 wget \
+       wireguard-tools wireguard-go iproute2 resolvconf \
     && rm -rf /var/lib/apt/lists/* \
     && update-ca-certificates
 
