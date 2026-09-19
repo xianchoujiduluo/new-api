@@ -100,7 +100,7 @@ func (w *payloadResponseWriter) WriteHeader(code int) {
 // no-op unless the option is enabled and the ClickHouse log database is active.
 func RequestPayloadCapture() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !common.RecordPayloadEnabled || !common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		if !common.RecordPayloadEnabled || !model.RequestPayloadSupported() {
 			c.Next()
 			return
 		}

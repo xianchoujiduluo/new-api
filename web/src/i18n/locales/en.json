@@ -4424,7 +4424,7 @@
     "Store + product created": "Store + product created",
     "Store ID": "Store ID",
     "Store ID is required": "Store ID is required",
-    "Store raw request headers, bodies, and the assembled response for each call. Requires the ClickHouse log database and increases storage usage.": "Store raw request headers, bodies, and the assembled response for each call. Requires the ClickHouse log database and increases storage usage.",
+    "Store raw request headers, bodies, and the assembled response for each call. Increases storage usage.": "Store raw request headers, bodies, and the assembled response for each call. Increases storage usage.",
     "Stored value is not echoed back for security": "Stored value is not echoed back for security",
     "stream": "stream",
     "Stream": "Stream",

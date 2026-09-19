@@ -111,8 +111,8 @@ func GetLogPayload(c *gin.Context) {
 		common.ApiErrorMsg(c, "request_id is required")
 		return
 	}
-	if !common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
-		common.ApiErrorMsg(c, "payload storage requires the ClickHouse log database")
+	if !model.RequestPayloadSupported() {
+		common.ApiErrorMsg(c, "request payload storage is not available")
 		return
 	}
 

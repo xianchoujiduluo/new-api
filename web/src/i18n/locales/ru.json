@@ -4424,7 +4424,7 @@
     "Store + product created": "Магазин и продукт созданы",
     "Store ID": "ID магазина",
     "Store ID is required": "Требуется ID магазина",
-    "Store raw request headers, bodies, and the assembled response for each call. Requires the ClickHouse log database and increases storage usage.": "Сохраняет необработанные заголовки и тела запросов, а также собранный ответ для каждого вызова. Требуется база журналов ClickHouse и увеличивается объём хранилища.",
+    "Store raw request headers, bodies, and the assembled response for each call. Increases storage usage.": "Сохраняет необработанные заголовки и тела запросов, а также собранный ответ для каждого вызова. Увеличивает объём хранилища.",
     "Stored value is not echoed back for security": "В целях безопасности сохранённое значение не отображается",
     "stream": "Поток",
     "Stream": "Поток",

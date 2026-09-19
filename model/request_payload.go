@@ -25,15 +25,17 @@ func RequestPayloadMaxBytes() int {
 }
 
 // RequestPayload stores the raw request/response material for a relay call.
-// It is only persisted when the ClickHouse log database is configured and the
-// RecordPayloadEnabled option is on. Rows are keyed by request_id, which is the
-// stable identifier shared with the logs table (ClickHouse logs.id is not a
-// reliable primary key).
+// It is only persisted when the RecordPayloadEnabled option is on. Rows are
+// keyed by request_id, which is the stable identifier shared with the logs
+// table (ClickHouse logs.id is not a reliable primary key).
+//
+// The table is created on whichever database LOG_DB points at: a custom
+// MergeTree DDL for ClickHouse, or AutoMigrate for SQLite/MySQL/PostgreSQL.
 type RequestPayload struct {
-	RequestId string `json:"request_id" gorm:"column:request_id"`
+	RequestId string `json:"request_id" gorm:"column:request_id;index:idx_request_payloads_request_id"`
 	LogId     int64  `json:"log_id" gorm:"column:log_id"`
 
-	CreatedAt int64  `json:"created_at" gorm:"column:created_at"`
+	CreatedAt int64  `json:"created_at" gorm:"column:created_at;index:idx_request_payloads_created_at"`
 	UserId    int    `json:"user_id" gorm:"column:user_id"`
 	Username  string `json:"username" gorm:"column:username"`
 	TokenId   int    `json:"token_id" gorm:"column:token_id"`
@@ -55,6 +57,13 @@ type RequestPayload struct {
 
 	IsTruncated  bool   `json:"is_truncated" gorm:"column:is_truncated"`
 	ErrorMessage string `json:"error_message" gorm:"column:error_message"`
+}
+
+// RequestPayloadSupported reports whether the request/response payload feature
+// can persist to the active log database. It is supported on SQLite, MySQL,
+// PostgreSQL, and ClickHouse.
+func RequestPayloadSupported() bool {
+	return LOG_DB != nil
 }
 
 // requestPayloadCreateTableSQL mirrors the logs table conventions: MergeTree,
@@ -90,10 +99,10 @@ ORDER BY (created_at, request_id)`
 }
 
 func migrateRequestPayloadTable() error {
-	if !common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
-		return nil
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		return LOG_DB.Exec(requestPayloadCreateTableSQL()).Error
 	}
-	return LOG_DB.Exec(requestPayloadCreateTableSQL()).Error
+	return LOG_DB.AutoMigrate(&RequestPayload{})
 }
 
 // sensitiveHeaderNames are compared case-insensitively for exact matches.
@@ -228,14 +237,32 @@ func GetRequestPayloadByRequestId(ctx context.Context, requestId string) (*Reque
 
 // DeleteOldRequestPayloads removes payload rows older than the cutoff. It is
 // invoked from the manual log-cleanup task so payload data shares the same
-// retention policy as the logs table. ClickHouse DELETE is a mutation, so all
-// matching rows are removed in a single synchronous statement.
+// retention policy as the logs table.
 func DeleteOldRequestPayloads(ctx context.Context, targetTimestamp int64) error {
-	if !common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+	if LOG_DB == nil {
 		return nil
 	}
-	return LOG_DB.WithContext(ctx).Exec(
-		"ALTER TABLE request_payloads DELETE WHERE created_at < ? SETTINGS mutations_sync = 1",
-		targetTimestamp,
-	).Error
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		return LOG_DB.WithContext(ctx).Exec(
+			"ALTER TABLE request_payloads DELETE WHERE created_at < ? SETTINGS mutations_sync = 1",
+			targetTimestamp,
+		).Error
+	}
+	// Relational databases delete in bounded batches so a large backlog does not
+	// hold one long transaction.
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		result := LOG_DB.WithContext(ctx).
+			Where("created_at < ?", targetTimestamp).
+			Limit(1000).
+			Delete(&RequestPayload{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return nil
+		}
+	}
 }

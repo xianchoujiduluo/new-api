@@ -403,7 +403,7 @@ export function LogSettingsSection({
                     <FormLabel>{t('Record request details')}</FormLabel>
                     <FormDescription>
                       {t(
-                        'Store raw request headers, bodies, and the assembled response for each call. Requires the ClickHouse log database and increases storage usage.'
+                        'Store raw request headers, bodies, and the assembled response for each call. Increases storage usage.'
                       )}
                     </FormDescription>
                   </SettingsSwitchContent>

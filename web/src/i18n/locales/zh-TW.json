@@ -4424,7 +4424,7 @@
     "Store + product created": "店鋪和產品已建立",
     "Store ID": "商店 ID",
     "Store ID is required": "商店 ID 為必填項",
-    "Store raw request headers, bodies, and the assembled response for each call. Requires the ClickHouse log database and increases storage usage.": "記錄每次呼叫的原始請求標頭、請求內文以及組裝後的回應內容。需要設定 ClickHouse 日誌資料庫，並會增加儲存空間用量。",
+    "Store raw request headers, bodies, and the assembled response for each call. Increases storage usage.": "記錄每次呼叫的原始請求標頭、請求內文以及組裝後的回應內容。會增加儲存空間用量。",
     "Stored value is not echoed back for security": "出於安全考慮，已儲存的值不會回顯",
     "stream": "流",
     "Stream": "流",

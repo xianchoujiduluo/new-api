@@ -4424,7 +4424,7 @@
     "Store + product created": "Boutique + produit créés",
     "Store ID": "ID du magasin",
     "Store ID is required": "L'ID de magasin est requis",
-    "Store raw request headers, bodies, and the assembled response for each call. Requires the ClickHouse log database and increases storage usage.": "Enregistre les en-têtes et corps bruts des requêtes ainsi que la réponse assemblée pour chaque appel. Nécessite la base de journaux ClickHouse et augmente l'utilisation du stockage.",
+    "Store raw request headers, bodies, and the assembled response for each call. Increases storage usage.": "Enregistre les en-têtes et corps bruts des requêtes ainsi que la réponse assemblée pour chaque appel. Augmente l'utilisation du stockage.",
     "Stored value is not echoed back for security": "Par sécurité, la valeur enregistrée n'est pas affichée",
     "stream": "Flux",
     "Stream": "Flux",

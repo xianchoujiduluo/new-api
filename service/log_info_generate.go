@@ -138,7 +138,7 @@ func appendPayloadRecorded(other *model.LogOther) {
 	if other == nil {
 		return
 	}
-	if common.RecordPayloadEnabled && common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+	if common.RecordPayloadEnabled && model.RequestPayloadSupported() {
 		other.SetPublic("payload_recorded", true)
 	}
 }

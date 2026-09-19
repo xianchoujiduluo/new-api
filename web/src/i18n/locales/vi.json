@@ -4424,7 +4424,7 @@
     "Store + product created": "Đã tạo cửa hàng + sản phẩm",
     "Store ID": "Mã cửa hàng",
     "Store ID is required": "Bắt buộc nhập Store ID",
-    "Store raw request headers, bodies, and the assembled response for each call. Requires the ClickHouse log database and increases storage usage.": "Lưu tiêu đề và nội dung yêu cầu thô cùng phản hồi đã hợp nhất cho mỗi lần gọi. Cần cơ sở dữ liệu nhật ký ClickHouse và làm tăng dung lượng lưu trữ.",
+    "Store raw request headers, bodies, and the assembled response for each call. Increases storage usage.": "Lưu tiêu đề và nội dung yêu cầu thô cùng phản hồi đã hợp nhất cho mỗi lần gọi. Làm tăng dung lượng lưu trữ.",
     "Stored value is not echoed back for security": "Vì bảo mật, giá trị đã lưu không được hiển thị lại",
     "stream": "dòng",
     "Stream": "Luồng",
