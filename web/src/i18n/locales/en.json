@@ -2442,6 +2442,7 @@
     "IP": "IP",
     "IP Address": "IP Address",
     "IP Filter Mode": "IP Filter Mode",
+    "IP is recorded only when IP logging is enabled in personal settings": "IP is recorded only when IP logging is enabled in personal settings",
     "IP Restriction": "IP Restriction",
     "IP Whitelist (supports CIDR)": "IP Whitelist (supports CIDR)",
     "IP: {{ip}} · Method: {{method}}": "IP: {{ip}} · Method: {{method}}",

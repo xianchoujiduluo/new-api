@@ -2442,6 +2442,7 @@
     "IP": "IP",
     "IP Address": "IP 地址",
     "IP Filter Mode": "IP 过滤模式",
+    "IP is recorded only when IP logging is enabled in personal settings": "仅当在个人设置中开启 IP 记录后才会记录 IP",
     "IP Restriction": "IP 限制",
     "IP Whitelist (supports CIDR)": "IP 白名单（支持 CIDR 表达式）",
     "IP: {{ip}} · Method: {{method}}": "IP：{{ip}} · 登录方式：{{method}}",

@@ -2442,6 +2442,7 @@
     "IP": "IP",
     "IP Address": "Địa chỉ IP",
     "IP Filter Mode": "Lọc IP",
+    "IP is recorded only when IP logging is enabled in personal settings": "IP chỉ được ghi khi bật ghi nhật ký IP trong cài đặt cá nhân",
     "IP Restriction": "Giới hạn IP",
     "IP Whitelist (supports CIDR)": "Danh sách trắng IP (hỗ trợ CIDR)",
     "IP: {{ip}} · Method: {{method}}": "IP: {{ip}} · Phương thức: {{method}}",

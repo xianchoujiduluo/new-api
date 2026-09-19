@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ColumnDef } from '@tanstack/react-table'
-import { GitBranch, Sparkles, KeyRound } from 'lucide-react'
+import { GitBranch, Sparkles, KeyRound, CircleHelp } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -776,6 +776,44 @@ export function useCommonLogsColumns(
           />
         )
       },
+    },
+
+    {
+      accessorKey: 'ip',
+      header: () => (
+        <TooltipProvider delay={300}>
+          <Tooltip>
+            <TooltipTrigger
+              render={<span className='inline-flex items-center gap-1' />}
+            >
+              {t('IP')}
+              <CircleHelp className='text-muted-foreground/60 size-3.5' />
+            </TooltipTrigger>
+            <TooltipContent side='top' className='max-w-xs'>
+              {t(
+                'IP is recorded only when IP logging is enabled in personal settings'
+              )}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ),
+      cell: ({ row }) => {
+        const log = row.original
+        // IP is only captured for usage (2) and error (5) logs, and only when
+        // the user enabled IP recording; other types always render empty.
+        if (!isTimingLogType(log.type) || !log.ip) return null
+        return (
+          <StatusBadge
+            label={log.ip}
+            variant='orange'
+            size='sm'
+            copyText={log.ip}
+            className='[font-family:var(--font-body)] font-mono'
+          />
+        )
+      },
+      size: 140,
+      maxSize: 180,
     },
 
     {

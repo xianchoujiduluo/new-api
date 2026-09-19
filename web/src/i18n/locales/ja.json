@@ -2442,6 +2442,7 @@
     "IP": "IP",
     "IP Address": "IPアドレス",
     "IP Filter Mode": "IP フィルターモード",
+    "IP is recorded only when IP logging is enabled in personal settings": "IP は個人設定で IP 記録を有効にした場合にのみ記録されます",
     "IP Restriction": "IP制限",
     "IP Whitelist (supports CIDR)": "IP ホワイトリスト（CIDR対応）",
     "IP: {{ip}} · Method: {{method}}": "IP: {{ip}} · 方法: {{method}}",
