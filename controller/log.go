@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func GetAllLogs(c *gin.Context) {
@@ -98,6 +100,49 @@ func GetLogByKey(c *gin.Context) {
 		"message": "",
 		"data":    logs,
 	})
+}
+
+// GetLogPayload returns the stored request/response payload for a request id.
+// Ownership is enforced for non-admin callers: a user may only read payloads
+// belonging to their own logs. Admin/root callers may read any payload.
+func GetLogPayload(c *gin.Context) {
+	requestId := c.Query("request_id")
+	if requestId == "" {
+		common.ApiErrorMsg(c, "request_id is required")
+		return
+	}
+	if !common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		common.ApiErrorMsg(c, "payload storage requires the ClickHouse log database")
+		return
+	}
+
+	ownerId, found, err := model.GetLogUserIdByRequestId(c.Request.Context(), requestId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !found {
+		common.ApiErrorMsg(c, "log not found")
+		return
+	}
+
+	role := c.GetInt("role")
+	userId := c.GetInt("id")
+	if role < common.RoleAdminUser && userId != ownerId {
+		common.ApiErrorMsg(c, "forbidden")
+		return
+	}
+
+	payload, err := model.GetRequestPayloadByRequestId(c.Request.Context(), requestId)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			common.ApiErrorMsg(c, "payload not found")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, payload)
 }
 
 func GetLogsStat(c *gin.Context) {

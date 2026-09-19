@@ -126,6 +126,9 @@ func GetStatus(c *gin.Context) {
 		"user_agreement_enabled":      legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
+
+		// Request/response payload capture requires the ClickHouse log database.
+		"log_payload_supported": common.UsingLogDatabase(common.DatabaseTypeClickHouse),
 	}
 
 	// 根据启用状态注入可选内容

@@ -95,6 +95,12 @@ var MemoryCacheEnabled bool
 
 var LogConsumeEnabled = true
 
+// RecordPayloadEnabled controls whether raw request/response material is
+// captured into the request_payloads table. It is opt-in because it duplicates
+// potentially large bodies and can contain sensitive prompt data. Only
+// effective when the log database is ClickHouse.
+var RecordPayloadEnabled = false
+
 var TLSInsecureSkipVerify bool
 var InsecureTLSConfig = &tls.Config{InsecureSkipVerify: true}
 

@@ -420,6 +420,14 @@ func runLogCleanupTask(ctx context.Context, task *model.SystemTask, runnerID str
 	}
 
 	result := LogCleanupResult{DeletedCount: state.Processed}
+
+	// The request_payloads table shares the manual cleanup policy of the logs
+	// table. It is best-effort: a failure here must not discard the logs cleanup
+	// result already achieved.
+	if err := model.DeleteOldRequestPayloads(ctx, payload.TargetTimestamp); err != nil {
+		logger.LogError(ctx, fmt.Sprintf("failed to clean request payloads: %v", err))
+	}
+
 	if err := model.FinishSystemTask(task.TaskID, runnerID, model.SystemTaskStatusSucceeded, result, ""); err != nil {
 		logSystemTaskLockError(ctx, task, err)
 	}

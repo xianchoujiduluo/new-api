@@ -225,6 +225,9 @@ export interface LogOtherData {
   image_generation_call_price?: number
   image_generation_call_count?: number
   is_system_prompt_overwritten?: boolean
+  // Set when raw request/response payload capture is enabled for this
+  // deployment; the frontend offers the "view detail request" action.
+  payload_recorded?: boolean
   po?: string[]
   billing_source?: string
   group?: string
@@ -253,6 +256,29 @@ export interface LogOtherData {
   subscription_consumed?: number
   subscription_remain?: number
   subscription_total?: number
+}
+
+export interface RequestPayload {
+  request_id: string
+  log_id: number
+  created_at: number
+  user_id: number
+  username: string
+  token_id: number
+  token_name: string
+  channel_id: number
+  model_name: string
+  client_ip: string
+  request_headers: string
+  request_body: string
+  request_body_size: number
+  status_code: number
+  is_stream: boolean
+  response_headers: string
+  response_body: string
+  response_body_size: number
+  is_truncated: boolean
+  error_message: string
 }
 
 /**

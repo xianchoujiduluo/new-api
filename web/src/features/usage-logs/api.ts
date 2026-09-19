@@ -27,6 +27,7 @@ import type {
   GetLogStatsResponse,
   GetMidjourneyLogsParams,
   GetTaskLogsParams,
+  RequestPayload,
   TaskArtifactsResponse,
   UserInfo,
 } from './types'
@@ -124,4 +125,29 @@ export async function getTaskArtifacts(taskId: string) {
     taskArtifactRequestConfig
   )
   return parseTaskArtifactsResponse(response.data)
+}
+
+// ============================================================================
+// Request Payload API
+// ============================================================================
+
+export interface GetRequestPayloadResponse {
+  success: boolean
+  message?: string
+  data?: RequestPayload
+}
+
+export async function getRequestPayload(
+  requestId: string,
+  isAdmin: boolean
+): Promise<RequestPayload> {
+  const path = isAdmin ? '/api/log/payload' : '/api/log/self/payload'
+  const res = await api.get<GetRequestPayloadResponse>(
+    `${path}?request_id=${encodeURIComponent(requestId)}`
+  )
+  const payload = res.data?.data
+  if (!res.data?.success || !payload) {
+    throw new Error(res.data?.message || 'Failed to load request payload')
+  }
+  return payload
 }

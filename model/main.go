@@ -410,6 +410,9 @@ func migrateClickHouseLogDB() error {
 	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS reasoning_tokens Int32 DEFAULT 0").Error; err != nil {
 		return err
 	}
+	if err := migrateRequestPayloadTable(); err != nil {
+		return err
+	}
 	return syncClickHouseLogTTL(ttlDays)
 }
 

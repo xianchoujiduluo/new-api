@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next'
 import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import {
   Popover,
   PopoverContent,
@@ -69,6 +70,7 @@ import {
 } from '../../lib/utils'
 import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
+import { PayloadDialog } from '../dialogs/payload-dialog'
 import { LogCostDisplay } from '../log-cost-display'
 import { ModelBadge } from '../model-badge'
 import { TimingMetricsCell, StreamTpsCell } from '../timing-metrics-cell'
@@ -857,6 +859,41 @@ export function useCommonLogsColumns(
       maxSize: 200,
     }
   )
+
+  columns.push({
+    id: 'payload',
+    header: t('Request Details'),
+    cell: function PayloadCell({ row }) {
+      const log = row.original
+      const other = parseLogOther(log.other)
+      const [dialogOpen, setDialogOpen] = useState(false)
+      // Only consume logs capture request/response material, and only when the
+      // backend advertises that payload recording is enabled.
+      if (log.type !== 2 || other?.payload_recorded !== true) return null
+      if (!log.request_id) return null
+
+      return (
+        <>
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='h-auto px-0 text-xs'
+            onClick={() => setDialogOpen(true)}
+          >
+            {t('View details')}
+          </Button>
+          <PayloadDialog
+            requestId={log.request_id}
+            isAdmin={isAdmin}
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+          />
+        </>
+      )
+    },
+    size: 120,
+  })
 
   return columns
 }

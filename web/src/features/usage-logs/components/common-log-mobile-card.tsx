@@ -126,6 +126,7 @@ export function CommonLogMobileCard<TData>(props: {
   const visibleMetadata = metadata.filter((id) => fields[id].visible)
   const costCell = props.cells.get('quota')
   const contentCell = props.cells.get('content')
+  const payloadCell = props.cells.get('payload')
   const channelCell = props.cells.get('channel')
   const cacheRead = other?.cache_tokens || 0
   const cacheWrite =
@@ -322,6 +323,14 @@ export function CommonLogMobileCard<TData>(props: {
             aria-hidden='true'
             className='text-primary pointer-events-none absolute top-4 right-0 size-4'
           />
+        </div>
+      )}
+      {payloadCell && (
+        <div className='min-w-0 border-t pt-2'>
+          {flexRender(
+            payloadCell.column.columnDef.cell,
+            payloadCell.getContext()
+          )}
         </div>
       )}
       <Dialog

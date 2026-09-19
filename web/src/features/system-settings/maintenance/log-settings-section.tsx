@@ -58,6 +58,7 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
+import { useStatus } from '@/hooks/use-status'
 import { api } from '@/lib/api'
 import dayjs from '@/lib/dayjs'
 import { formatTimestampToDate } from '@/lib/format'
@@ -85,12 +86,14 @@ import type { LogCleanupTask } from '../types'
 
 const logSettingsSchema = z.object({
   LogConsumeEnabled: z.boolean(),
+  RecordPayloadEnabled: z.boolean(),
 })
 
 type LogSettingsFormValues = z.infer<typeof logSettingsSchema>
 
 type LogSettingsSectionProps = {
   defaultEnabled: boolean
+  payloadRecordDefaultEnabled: boolean
 }
 
 type ServerLogInfo = {
@@ -146,13 +149,17 @@ function isActiveLogCleanupTask(task: LogCleanupTask | null) {
 
 export function LogSettingsSection({
   defaultEnabled,
+  payloadRecordDefaultEnabled,
 }: LogSettingsSectionProps) {
   const { t } = useTranslation()
+  const { status } = useStatus()
+  const payloadRecordSupported = status?.data?.log_payload_supported === true
   const updateOption = useUpdateOption()
   const form = useForm<LogSettingsFormValues>({
     resolver: zodResolver(logSettingsSchema),
     defaultValues: {
       LogConsumeEnabled: defaultEnabled,
+      RecordPayloadEnabled: payloadRecordDefaultEnabled,
     },
   })
 
@@ -180,8 +187,11 @@ export function LogSettingsSection({
   }, [])
 
   useEffect(() => {
-    form.reset({ LogConsumeEnabled: defaultEnabled })
-  }, [defaultEnabled, form])
+    form.reset({
+      LogConsumeEnabled: defaultEnabled,
+      RecordPayloadEnabled: payloadRecordDefaultEnabled,
+    })
+  }, [defaultEnabled, payloadRecordDefaultEnabled, form])
 
   useEffect(() => {
     fetchServerLogInfo()
@@ -263,11 +273,21 @@ export function LogSettingsSection({
   }, [logCleanupActive, logCleanupTaskId, t])
 
   const onSubmit = async (values: LogSettingsFormValues) => {
-    if (values.LogConsumeEnabled === defaultEnabled) return
-    await updateOption.mutateAsync({
-      key: 'LogConsumeEnabled',
-      value: values.LogConsumeEnabled,
-    })
+    if (values.LogConsumeEnabled !== defaultEnabled) {
+      await updateOption.mutateAsync({
+        key: 'LogConsumeEnabled',
+        value: values.LogConsumeEnabled,
+      })
+    }
+    if (
+      payloadRecordSupported &&
+      values.RecordPayloadEnabled !== payloadRecordDefaultEnabled
+    ) {
+      await updateOption.mutateAsync({
+        key: 'RecordPayloadEnabled',
+        value: values.RecordPayloadEnabled,
+      })
+    }
   }
 
   const handleRequestCleanLogs = () => {
@@ -372,6 +392,32 @@ export function LogSettingsSection({
               </SettingsSwitchItem>
             )}
           />
+
+          {payloadRecordSupported && (
+            <FormField
+              control={form.control}
+              name='RecordPayloadEnabled'
+              render={({ field }) => (
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Record request details')}</FormLabel>
+                    <FormDescription>
+                      {t(
+                        'Store raw request headers, bodies, and the assembled response for each call. Requires the ClickHouse log database and increases storage usage.'
+                      )}
+                    </FormDescription>
+                  </SettingsSwitchContent>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </SettingsSwitchItem>
+              )}
+            />
+          )}
 
           <SettingsControlGroup className='space-y-3'>
             <div>

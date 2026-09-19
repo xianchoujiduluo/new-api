@@ -125,7 +125,22 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	appendBillingInfo(relayInfo, other)
 	appendParamOverrideInfo(relayInfo, other)
 	appendStreamStatus(relayInfo, other)
+	appendPayloadRecorded(other)
 	return other
+}
+
+// appendPayloadRecorded advertises that the deployment is capturing
+// request/response payloads, so the frontend can offer the "view details"
+// action. Capture is best-effort: the payload is written after the handler
+// returns, so this marker reflects configuration rather than a per-request
+// context flag. When enabled, the payload view resolves by request_id.
+func appendPayloadRecorded(other *model.LogOther) {
+	if other == nil {
+		return
+	}
+	if common.RecordPayloadEnabled && common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		other.SetPublic("payload_recorded", true)
+	}
 }
 
 func appendParamOverrideInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther) {
