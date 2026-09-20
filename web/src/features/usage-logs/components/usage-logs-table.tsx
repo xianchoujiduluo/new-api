@@ -164,7 +164,23 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   })
 
   const logs = data?.items || []
-  const columns = useColumnsByCategory(logCategory, isAdmin, isRoot)
+  // The request-details column is only offered when the current page actually
+  // contains a log with stored request/response material. Only common usage
+  // logs carry `type`/`other`, so narrow before probing.
+  const hasPayloadRecords =
+    logCategory === 'common' &&
+    logs.some((log) => {
+      if (!('type' in log) || !('other' in log)) return false
+      return (
+        log.type === 2 && parseLogOther(log.other)?.payload_recorded === true
+      )
+    })
+  const columns = useColumnsByCategory(
+    logCategory,
+    isAdmin,
+    isRoot,
+    hasPayloadRecords
+  )
   const isLoadingData = isLoading || (isFetching && !data)
 
   const { table } = useDataTable({

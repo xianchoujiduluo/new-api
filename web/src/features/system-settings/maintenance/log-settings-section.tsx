@@ -153,7 +153,8 @@ export function LogSettingsSection({
 }: LogSettingsSectionProps) {
   const { t } = useTranslation()
   const { status } = useStatus()
-  const payloadRecordSupported = status?.data?.log_payload_supported === true
+  // getStatus() already unwraps the API envelope, so status is the payload itself.
+  const payloadRecordSupported = status?.log_payload_supported === true
   const updateOption = useUpdateOption()
   const form = useForm<LogSettingsFormValues>({
     resolver: zodResolver(logSettingsSchema),

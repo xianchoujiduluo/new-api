@@ -336,7 +336,8 @@ function buildTypeDetailSegments(
 
 export function useCommonLogsColumns(
   isAdmin: boolean,
-  isRoot: boolean
+  isRoot: boolean,
+  hasPayloadRecords = false
 ): ColumnDef<UsageLog>[] {
   const { t } = useTranslation()
   const columns: ColumnDef<UsageLog>[] = [
@@ -898,40 +899,46 @@ export function useCommonLogsColumns(
     }
   )
 
-  columns.push({
-    id: 'payload',
-    header: t('Request Details'),
-    cell: function PayloadCell({ row }) {
-      const log = row.original
-      const other = parseLogOther(log.other)
-      const [dialogOpen, setDialogOpen] = useState(false)
-      // Only consume logs capture request/response material, and only when the
-      // backend advertises that payload recording is enabled.
-      if (log.type !== 2 || other?.payload_recorded !== true) return null
-      if (!log.request_id) return null
+  // The payload column is only useful when at least one visible log actually
+  // carries captured request/response material. Gating the whole column (not
+  // just the cell) keeps an empty "Request Details" header out of the table
+  // when recording is disabled or no payloads have been stored yet.
+  if (hasPayloadRecords) {
+    columns.push({
+      id: 'payload',
+      header: t('Request Details'),
+      cell: function PayloadCell({ row }) {
+        const log = row.original
+        const other = parseLogOther(log.other)
+        const [dialogOpen, setDialogOpen] = useState(false)
+        // Only consume logs capture request/response material, and only when
+        // the backend actually stored a payload for this request.
+        if (log.type !== 2 || other?.payload_recorded !== true) return null
+        if (!log.request_id) return null
 
-      return (
-        <>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='h-auto px-0 text-xs'
-            onClick={() => setDialogOpen(true)}
-          >
-            {t('View details')}
-          </Button>
-          <PayloadDialog
-            requestId={log.request_id}
-            isAdmin={isAdmin}
-            open={dialogOpen}
-            onOpenChange={setDialogOpen}
-          />
-        </>
-      )
-    },
-    size: 120,
-  })
+        return (
+          <>
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-auto px-0 text-xs'
+              onClick={() => setDialogOpen(true)}
+            >
+              {t('View details')}
+            </Button>
+            <PayloadDialog
+              requestId={log.request_id}
+              isAdmin={isAdmin}
+              open={dialogOpen}
+              onOpenChange={setDialogOpen}
+            />
+          </>
+        )
+      },
+      size: 120,
+    })
+  }
 
   return columns
 }
