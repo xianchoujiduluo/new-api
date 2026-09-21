@@ -4,6 +4,7 @@ import (
 	"math"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -1187,4 +1188,113 @@ func TestFrontendSimulationContract(t *testing.T) {
 			}
 		})
 	}
+}
+
+// peakOffPeakExpr mirrors a real time-of-day pricing rule: weekday working hours
+// are billed at the "peak" tier, everything else at "off_peak".
+const peakOffPeakExpr = `weekday("Asia/Shanghai") >= 1 && weekday("Asia/Shanghai") <= 5
+    && ((hour("Asia/Shanghai") >= 9 && hour("Asia/Shanghai") < 12)
+     || (hour("Asia/Shanghai") >= 14 && hour("Asia/Shanghai") < 18))
+    ? tier("peak", p * 2 + cr * 0.04 + c * 8)
+    : tier("off_peak", p * 1 + cr * 0.02 + c * 4)`
+
+func shanghaiTime(t *testing.T, year int, month time.Month, day, hour, minute int) time.Time {
+	t.Helper()
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	require.NoError(t, err)
+	return time.Date(year, month, day, hour, minute, 0, 0, loc)
+}
+
+// TestTimeProbesHonorReferenceTime pins the wall clock so a historical request is
+// re-priced against the tier that applied at its own timestamp instead of "now".
+func TestTimeProbesHonorReferenceTime(t *testing.T) {
+	params := billingexpr.TokenParams{P: 1000, C: 100, CR: 200}
+	const peakCost = 1000*2 + 200*0.04 + 100*8
+	const offPeakCost = 1000*1 + 200*0.02 + 100*4
+
+	cases := []struct {
+		name string
+		at   time.Time
+		tier string
+		cost float64
+	}{
+		{
+			name: "weekday working hours",
+			at:   shanghaiTime(t, 2026, time.August, 21, 10, 30),
+			tier: "peak",
+			cost: peakCost,
+		},
+		{
+			name: "weekday afternoon window start",
+			at:   shanghaiTime(t, 2026, time.August, 21, 14, 0),
+			tier: "peak",
+			cost: peakCost,
+		},
+		{
+			name: "weekday before the morning window",
+			at:   shanghaiTime(t, 2026, time.August, 21, 8, 59),
+			tier: "off_peak",
+			cost: offPeakCost,
+		},
+		{
+			name: "weekday lunch gap",
+			at:   shanghaiTime(t, 2026, time.August, 21, 12, 0),
+			tier: "off_peak",
+			cost: offPeakCost,
+		},
+		{
+			name: "weekend during working hours",
+			at:   shanghaiTime(t, 2026, time.August, 22, 10, 30),
+			tier: "off_peak",
+			cost: offPeakCost,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			at := tc.at
+			cost, trace, err := billingexpr.RunExprWithRequest(
+				peakOffPeakExpr,
+				params,
+				billingexpr.RequestInput{ReferenceTime: &at},
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tc.tier, trace.MatchedTier)
+			assert.InDelta(t, tc.cost, cost, 0.0001)
+		})
+	}
+}
+
+// The same expression must resolve to different tiers for two historical
+// instants even when both are evaluated now — this is what plain re-evaluation
+// (without a reference time) cannot do.
+func TestTimeProbesDistinguishHistoricalInstants(t *testing.T) {
+	params := billingexpr.TokenParams{P: 1000, C: 100, CR: 200}
+
+	peak := shanghaiTime(t, 2026, time.August, 21, 10, 30)
+	offPeak := shanghaiTime(t, 2026, time.August, 22, 10, 30)
+
+	peakCost, peakTrace, err := billingexpr.RunExprWithRequest(
+		peakOffPeakExpr, params, billingexpr.RequestInput{ReferenceTime: &peak})
+	require.NoError(t, err)
+
+	offPeakCost, offPeakTrace, err := billingexpr.RunExprWithRequest(
+		peakOffPeakExpr, params, billingexpr.RequestInput{ReferenceTime: &offPeak})
+	require.NoError(t, err)
+
+	assert.Equal(t, "peak", peakTrace.MatchedTier)
+	assert.Equal(t, "off_peak", offPeakTrace.MatchedTier)
+	assert.Greater(t, peakCost, offPeakCost)
+}
+
+// A nil reference time preserves the live-clock behavior: the probe still
+// evaluates (and hour() is always within 0-23).
+func TestTimeProbesDefaultToLiveClock(t *testing.T) {
+	cost, trace, err := billingexpr.RunExpr(
+		`hour("Asia/Shanghai") >= 0 ? tier("live", p * 3) : tier("never", p * 1)`,
+		billingexpr.TokenParams{P: 10},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "live", trace.MatchedTier)
+	assert.InDelta(t, 30, cost, 0.0001)
 }

@@ -20,6 +20,7 @@ import { SystemBehaviorSection } from '../general/system-behavior-section'
 import { EmailSettingsSection } from '../integrations/email-settings-section'
 import { MonitoringSettingsSection } from '../integrations/monitoring-settings-section'
 import { WorkerSettingsSection } from '../integrations/worker-settings-section'
+import { LogQuotaRecalcSection } from '../maintenance/log-quota-recalc-section'
 import { LogSettingsSection } from '../maintenance/log-settings-section'
 import { PerformanceSection } from '../maintenance/performance-section'
 import { UpdateCheckerSection } from '../maintenance/update-checker-section'
@@ -103,6 +104,11 @@ const OPERATIONS_SECTIONS = [
         payloadRecordDefaultEnabled={Boolean(settings.RecordPayloadEnabled)}
       />
     ),
+  },
+  {
+    id: 'quota-recalc',
+    titleKey: 'Quota Recalculation',
+    build: (_settings: OperationsSettings) => <LogQuotaRecalcSection />,
   },
   {
     id: 'performance',

@@ -3,14 +3,23 @@ package billingexpr
 import (
 	"crypto/sha256"
 	"fmt"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 )
 
+// RequestInput carries the request-scoped probes used by the expression
+// language. Headers/Body/Usage are populated when a live request is available.
 type RequestInput struct {
 	Headers map[string]string
 	Body    []byte
 	Usage   map[string]any
+
+	// ReferenceTime pins the wall clock used by the time probes (`hour`,
+	// `minute`, `weekday`, `month`, `day`). It exists so a historical request can
+	// be re-evaluated at its original timestamp instead of "now". Nil keeps the
+	// live behavior: the probes read the current time.
+	ReferenceTime *time.Time
 }
 
 // TokenParams holds all token dimensions passed into an Expr evaluation.

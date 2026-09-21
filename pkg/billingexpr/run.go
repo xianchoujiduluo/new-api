@@ -120,11 +120,11 @@ func runProgram(prog *vm.Program, requestRules []RequestRuleTrace, params TokenP
 			}
 			return strings.Contains(fmt.Sprint(source), substr)
 		},
-		"hour":    func(tz string) int { return timeInZone(tz).Hour() },
-		"minute":  func(tz string) int { return timeInZone(tz).Minute() },
-		"weekday": func(tz string) int { return int(timeInZone(tz).Weekday()) },
-		"month":   func(tz string) int { return int(timeInZone(tz).Month()) },
-		"day":     func(tz string) int { return timeInZone(tz).Day() },
+		"hour":    func(tz string) int { return timeInZone(tz, request.ReferenceTime).Hour() },
+		"minute":  func(tz string) int { return timeInZone(tz, request.ReferenceTime).Minute() },
+		"weekday": func(tz string) int { return int(timeInZone(tz, request.ReferenceTime).Weekday()) },
+		"month":   func(tz string) int { return int(timeInZone(tz, request.ReferenceTime).Month()) },
+		"day":     func(tz string) int { return timeInZone(tz, request.ReferenceTime).Day() },
 		"max":     math.Max,
 		"min":     math.Min,
 		"abs":     math.Abs,
@@ -143,16 +143,24 @@ func runProgram(prog *vm.Program, requestRules []RequestRuleTrace, params TokenP
 	return f, trace, nil
 }
 
-func timeInZone(tz string) time.Time {
+// timeInZone resolves the time probes' wall clock. When ref is nil the probes
+// read the live clock (request-time behavior); otherwise they are pinned to the
+// supplied instant, which lets historical requests be re-evaluated at their own
+// timestamp.
+func timeInZone(tz string, ref *time.Time) time.Time {
+	base := time.Now()
+	if ref != nil {
+		base = *ref
+	}
 	tz = strings.TrimSpace(tz)
 	if tz == "" {
-		return time.Now().UTC()
+		return base.UTC()
 	}
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
-		return time.Now().UTC()
+		return base.UTC()
 	}
-	return time.Now().In(loc)
+	return base.In(loc)
 }
 
 func normalizeHeaders(headers map[string]string) map[string]string {

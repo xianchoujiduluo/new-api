@@ -328,6 +328,7 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/self/search", middleware.UserAuth(), middleware.SearchRateLimit(), controller.SearchUserLogs)
 		logRoute.GET("/self/payload", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.GetLogPayload)
 		logRoute.GET("/payload", middleware.AdminAuth(), middleware.CriticalRateLimit(), controller.GetLogPayload)
+		logRoute.POST("/quota_recalc", middleware.RootAuth(), middleware.CriticalRateLimit(), controller.RecalculateLogQuota)
 
 		systemTaskRoute := apiRouter.Group("/system-task")
 		systemTaskRoute.Use(middleware.RootAuth())
