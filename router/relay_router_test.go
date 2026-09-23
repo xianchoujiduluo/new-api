@@ -124,3 +124,21 @@ func setupRelayRouterTestDB(t *testing.T) {
 		}
 	})
 }
+
+// TestSetRelayRouterRegistersOpenAIResponsesEndpoint guards the client entry
+// point that Responses-only clients (Codex) require. The route was absent for a
+// long time, so a refactor that drops it silently turns those clients into a
+// 404 through the web-router catch-all.
+func TestSetRelayRouterRegistersOpenAIResponsesEndpoint(t *testing.T) {
+	setupRelayRouterTestDB(t)
+
+	engine := gin.New()
+	require.NotPanics(t, func() { SetRelayRouter(engine) })
+
+	actual := make(map[string]struct{}, len(engine.Routes()))
+	for _, route := range engine.Routes() {
+		actual[route.Method+" "+route.Path] = struct{}{}
+	}
+	assert.Contains(t, actual, http.MethodPost+" /v1/responses")
+	assert.Contains(t, actual, http.MethodPost+" /v1/responses/compact")
+}

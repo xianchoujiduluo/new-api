@@ -303,6 +303,7 @@ const SENSITIVE_FORM_FIELDS = [
   'system_prompt_override',
   'allow_service_tier',
   'disable_store',
+  'convert_responses_to_chat',
   'allow_safety_identifier',
   'allow_include_obfuscation',
   'allow_inference_geo',
@@ -4542,6 +4543,34 @@ export function ChannelMutateDrawer({
                                             <FormDescription>
                                               {t(
                                                 'When enabled, the store field will be blocked'
+                                              )}
+                                            </FormDescription>
+                                          </div>
+                                          <FormControl>
+                                            <Switch
+                                              checked={field.value}
+                                              onCheckedChange={field.onChange}
+                                            />
+                                          </FormControl>
+                                        </FormItem>
+                                      )}
+                                    />
+
+                                    <FormField
+                                      control={form.control}
+                                      name='convert_responses_to_chat'
+                                      render={({ field }) => (
+                                        <FormItem className='flex items-center justify-between gap-3 px-4 py-3'>
+                                          <div className='space-y-0.5'>
+                                            <FormLabel className='text-sm'>
+                                              {t('Convert Responses to Chat Completions')}
+                                            </FormLabel>
+                                            <FormDescription>
+                                              {t(
+                                                'Translates /v1/responses requests into /v1/chat/completions for upstreams that do not implement the Responses API.'
+                                              )}{' '}
+                                              {t(
+                                                'Takes effect on the next request.'
                                               )}
                                             </FormDescription>
                                           </div>

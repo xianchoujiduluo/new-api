@@ -274,6 +274,7 @@ export const channelFormSchema = z
     // Field passthrough controls (stored in settings JSON)
     allow_service_tier: z.boolean().optional(), // OpenAI/Anthropic
     disable_store: z.boolean().optional(), // OpenAI only
+    convert_responses_to_chat: z.boolean().optional(), // OpenAI only
     allow_safety_identifier: z.boolean().optional(), // OpenAI only
     allow_include_obfuscation: z.boolean().optional(), // OpenAI: include usage obfuscation
     allow_inference_geo: z.boolean().optional(), // OpenAI/Anthropic: inference geography
@@ -455,6 +456,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   // Field passthrough controls
   allow_service_tier: false,
   disable_store: false,
+  convert_responses_to_chat: false,
   allow_safety_identifier: false,
   allow_include_obfuscation: false,
   allow_inference_geo: false,
@@ -521,6 +523,7 @@ export function transformChannelToFormDefaults(
   let awsKeyType: 'ak_sk' | 'api_key' = 'ak_sk'
   let allowServiceTier = false
   let disableStore = false
+  let convertResponsesToChat = false
   let allowSafetyIdentifier = false
   let allowIncludeObfuscation = false
   let allowInferenceGeo = false
@@ -541,6 +544,7 @@ export function transformChannelToFormDefaults(
       awsKeyType = parsed.aws_key_type || 'ak_sk'
       allowServiceTier = parsed.allow_service_tier === true
       disableStore = parsed.disable_store === true
+      convertResponsesToChat = parsed.convert_responses_to_chat === true
       allowSafetyIdentifier = parsed.allow_safety_identifier === true
       allowIncludeObfuscation = parsed.allow_include_obfuscation === true
       allowInferenceGeo = parsed.allow_inference_geo === true
@@ -600,6 +604,7 @@ export function transformChannelToFormDefaults(
     aws_key_type: awsKeyType,
     allow_service_tier: allowServiceTier,
     disable_store: disableStore,
+    convert_responses_to_chat: convertResponsesToChat,
     allow_include_obfuscation: allowIncludeObfuscation,
     allow_inference_geo: allowInferenceGeo,
     allow_speed: allowSpeed,
@@ -702,6 +707,8 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
 
   if (OPENAI_FIELD_PASSTHROUGH_TYPES.has(formData.type)) {
     settingsObj.disable_store = formData.disable_store === true
+    settingsObj.convert_responses_to_chat =
+      formData.convert_responses_to_chat === true
     settingsObj.allow_safety_identifier =
       formData.allow_safety_identifier === true
     settingsObj.allow_include_obfuscation =
@@ -709,6 +716,9 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
   } else {
     if ('disable_store' in settingsObj) {
       delete settingsObj.disable_store
+    }
+    if ('convert_responses_to_chat' in settingsObj) {
+      delete settingsObj.convert_responses_to_chat
     }
     if ('allow_safety_identifier' in settingsObj) {
       delete settingsObj.allow_safety_identifier

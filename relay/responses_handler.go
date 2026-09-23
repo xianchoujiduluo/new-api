@@ -79,6 +79,27 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 		return types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())
 	}
 	adaptor.Init(info)
+
+	// A channel can opt into translating Responses into Chat Completions when its
+	// upstream only implements /v1/chat/completions (Codex clients rely on this).
+	// The compact endpoint is excluded: its upstream contract is Responses-only.
+	if info.ChannelOtherSettings.ConvertResponsesToChat &&
+		info.RelayMode == relayconstant.RelayModeResponses &&
+		!info.ChannelSetting.PassThroughBodyEnabled {
+		usage, newApiErr := textRequestViaChatCompletions(c, info, adaptor, request)
+		if newApiErr != nil {
+			return newApiErr
+		}
+		// RelayMode is restored by the conversion helper before it returns, so
+		// settlement sees the client-facing Responses mode.
+		if strings.HasPrefix(info.OriginModelName, "gpt-4o-audio") {
+			service.PostAudioConsumeQuota(c, info, usage, "")
+		} else {
+			service.PostTextConsumeQuota(c, info, usage, nil)
+		}
+		return nil
+	}
+
 	var requestBody io.Reader
 	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
 		storage, err := common.GetBodyStorage(c)
