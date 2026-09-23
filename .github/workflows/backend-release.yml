@@ -201,27 +201,85 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # 整条发布链路的通知汇总点：同一次发布只在这里发一条，
+  # 其余 workflow 不再各自通知，避免一次发布刷屏。
+  # needs 必须列出本 workflow 的全部发布 job，漏写只会让通知静默少一项。
   notify:
-    name: Email workflow result
+    name: Notify workflow result
     needs: [changes, release]
-    if: always()
+    if: ${{ always() && (needs.changes.result != 'success' || needs.changes.outputs.backend == 'true') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Send workflow result email
-        uses: dawidd6/action-send-mail@v6
-        with:
-          server_address: ${{ vars.SMTP_HOST }}
-          server_port: ${{ vars.SMTP_PORT }}
-          secure: true
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          from: ${{ secrets.SMTP_FROM }}
-          to: ${{ secrets.NOTIFY_EMAIL_TO }}
-          subject: "[${{ github.repository }}] ${{ github.workflow }} result"
-          body: |
-            Repository: ${{ github.repository }}
-            Workflow: ${{ github.workflow }}
-            Ref: ${{ github.ref_name }}
-            Commit: ${{ github.sha }}
-            Backend release: ${{ needs.release.result }}
-            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      # 汇总正文只算一次，各渠道共用
+      - name: Build result summary
+        id: summary
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+
+          needs = json.loads(os.environ["NEEDS_JSON"])
+          results = [info.get("result", "unknown") for info in needs.values()]
+          if "failure" in results:
+              overall = "failure"
+          elif "cancelled" in results:
+              overall = "cancelled"
+          else:
+              overall = "success"
+
+          lines = [
+              f"[{os.environ['REPO']}] {os.environ['REF']} - {overall}",
+              "",
+              f"Repository: {os.environ['REPO']}",
+              f"Ref: {os.environ['REF']}",
+              f"Commit: {os.environ['SHA']}",
+              "",
+              "Jobs:",
+          ]
+          lines += [f"- {job}: {info.get('result', 'unknown')}" for job, info in needs.items()]
+
+          print("text<<SUMMARY_EOF")
+          print("\n".join(lines))
+          print("SUMMARY_EOF")
+          PY
+
+      - name: Notify by Feishu
+        env:
+          FEISHU_WEB_HOOK: ${{ secrets.FEISHU_WEB_HOOK }}
+          FEISHU_SIGN: ${{ secrets.FEISHU_SIGN }}
+          SUMMARY: ${{ steps.summary.outputs.text }}
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, hmac, json, os, sys, time, urllib.error, urllib.request
+
+          timestamp = str(int(time.time()))
+          string_to_sign = f"{timestamp}\n{os.environ['FEISHU_SIGN']}"
+          sign = base64.b64encode(
+              hmac.new(string_to_sign.encode(), b"", hashlib.sha256).digest()
+          ).decode()
+
+          request = urllib.request.Request(
+              os.environ["FEISHU_WEB_HOOK"],
+              data=json.dumps({
+                  "timestamp": timestamp,
+                  "sign": sign,
+                  "msg_type": "text",
+                  "content": {"text": os.environ["SUMMARY"]},
+              }).encode(),
+              headers={"Content-Type": "application/json"},
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  status, body = response.status, response.read().decode()
+          except urllib.error.HTTPError as error:
+              status, body = error.code, error.read().decode()
+
+          print(f"HTTP {status}: {body}")
+          code = json.loads(body).get("code")
+          if code != 0:
+              sys.exit(f"Feishu notify failed: code={code}, body={body}")
+          PY

@@ -49,28 +49,3 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  notify:
-    name: Email workflow result
-    needs: [release]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send workflow result email
-        uses: dawidd6/action-send-mail@v6
-        with:
-          server_address: ${{ vars.SMTP_HOST }}
-          server_port: ${{ vars.SMTP_PORT }}
-          secure: true
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          from: ${{ secrets.SMTP_FROM }}
-          to: ${{ secrets.NOTIFY_EMAIL_TO }}
-          subject: "[${{ github.repository }}] ${{ github.workflow }} result"
-          body: |
-            Repository: ${{ github.repository }}
-            Workflow: ${{ github.workflow }}
-            Ref: ${{ github.ref_name }}
-            Commit: ${{ github.sha }}
-            Release: ${{ needs.release.result }}
-            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
