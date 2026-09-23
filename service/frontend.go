@@ -38,6 +38,9 @@ type FrontendUpdater struct {
 	Root         string
 	Client       *http.Client
 	URLValidator func(string) error
+	// Reporter observes download and extraction progress. It is optional and
+	// only set by the asynchronous download endpoint.
+	Reporter FrontendDownloadReporter
 
 	mu sync.Mutex
 }
@@ -67,16 +70,6 @@ func getDefaultFrontendUpdater() *FrontendUpdater {
 	return defaultFrontendUpdater
 }
 
-// UpdateConfiguredFrontend updates the frontend using the administrator's
-// persisted download URL. The URL is never accepted from the request body.
-func UpdateConfiguredFrontend(ctx context.Context) error {
-	rawURL := ConfiguredFrontendDownloadURL()
-	if strings.TrimSpace(rawURL) == "" {
-		return fmt.Errorf("前端下载地址未配置")
-	}
-	return getDefaultFrontendUpdater().Update(ctx, rawURL)
-}
-
 // ConfiguredFrontendDownloadURL returns the current persisted archive URL.
 func ConfiguredFrontendDownloadURL() string {
 	common.OptionMapRWMutex.RLock()
@@ -99,7 +92,19 @@ func ExternalFrontendEnabled() bool {
 }
 
 // Update downloads, validates, extracts, and activates an archive.
+// Update stages the archive and immediately activates it. It is retained for
+// callers that want both steps; the management API drives them separately so an
+// operator can inspect a staged release before swapping live assets.
 func (u *FrontendUpdater) Update(ctx context.Context, rawURL string) error {
+	if err := u.Stage(ctx, rawURL); err != nil {
+		return err
+	}
+	return u.Activate()
+}
+
+// Stage downloads, validates and extracts a frontend archive into the staging
+// directory. The live assets are not touched.
+func (u *FrontendUpdater) Stage(ctx context.Context, rawURL string) error {
 	if u == nil {
 		return fmt.Errorf("前端更新器未初始化")
 	}
@@ -121,10 +126,10 @@ func (u *FrontendUpdater) Update(ctx context.Context, rawURL string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	updateCtx, cancel := context.WithTimeout(ctx, frontendUpdateTimeout)
+	stageCtx, cancel := context.WithTimeout(ctx, frontendUpdateTimeout)
 	defer cancel()
 
-	archivePath, err := u.download(updateCtx, rawURL)
+	archivePath, err := u.download(stageCtx, rawURL)
 	if err != nil {
 		return err
 	}
@@ -142,7 +147,7 @@ func (u *FrontendUpdater) Update(ctx context.Context, rawURL string) error {
 		return fmt.Errorf("检查前端目录失败: %w", statErr)
 	}
 
-	tempRoot, err := os.MkdirTemp(parent, ".frontend-update-")
+	tempRoot, err := os.MkdirTemp(parent, ".frontend-stage-")
 	if err != nil {
 		return fmt.Errorf("创建前端临时目录失败: %w", err)
 	}
@@ -153,17 +158,58 @@ func (u *FrontendUpdater) Update(ctx context.Context, rawURL string) error {
 		}
 	}()
 
+	u.reportStage(FrontendStateExtracting, "正在解压前端压缩包")
 	if err := extractFrontendArchive(archivePath, tempRoot); err != nil {
 		return err
 	}
 	if err := normalizeFrontendRoot(tempRoot); err != nil {
 		return err
 	}
-	if err := activateFrontendDirectory(u.Root, tempRoot); err != nil {
+
+	// Publish into the staging path only after the archive validated, so an
+	// interrupted or rejected download never leaves a half-written staging.
+	staging := FrontendStagingDir(u.Root)
+	if err := os.RemoveAll(staging); err != nil {
+		return fmt.Errorf("清理旧暂存前端目录失败: %w", err)
+	}
+	if err := os.Rename(tempRoot, staging); err != nil {
+		return fmt.Errorf("暂存前端目录失败: %w", err)
+	}
+	keepTemp = true
+	if err := writeFrontendStagingMeta(u.Root, rawURL, common.GetTimestamp()); err != nil {
 		return err
 	}
-	keepTemp = true // activateFrontendDirectory renamed the directory.
 	return nil
+}
+
+// Activate swaps the live assets for the staged release. It is a directory
+// rename, so it is effectively instantaneous.
+func (u *FrontendUpdater) Activate() error {
+	if u == nil {
+		return fmt.Errorf("前端更新器未初始化")
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.activateLocked()
+}
+
+func (u *FrontendUpdater) activateLocked() error {
+	staging := FrontendStagingDir(u.Root)
+	if info, err := os.Lstat(staging); err != nil || !info.IsDir() {
+		return fmt.Errorf("暂存前端目录不存在")
+	}
+	if err := activateFrontendDirectory(u.Root, staging); err != nil {
+		return err
+	}
+	removeFrontendStagingMeta(u.Root)
+	return nil
+}
+
+func (u *FrontendUpdater) reportStage(stage FrontendDownloadState, message string) {
+	if u.Reporter == nil {
+		return
+	}
+	u.Reporter.Stage(stage, message)
 }
 
 func (u *FrontendUpdater) download(ctx context.Context, rawURL string) (string, error) {
@@ -221,7 +267,15 @@ func (u *FrontendUpdater) download(ctx context.Context, rawURL string) (string, 
 		}
 	}()
 	limited := io.LimitReader(resp.Body, frontendArchiveMaxBytes+1)
-	n, err := io.Copy(temp, limited)
+	var source io.Reader = limited
+	if u.Reporter != nil {
+		total := resp.ContentLength
+		u.Reporter.Total(total, rawURL)
+		source = &progressReader{r: limited, onProgress: func(done int64) {
+			u.Reporter.Progress(done, total)
+		}}
+	}
+	n, err := io.Copy(temp, source)
 	if err != nil {
 		return "", fmt.Errorf("保存前端压缩包失败: %w", err)
 	}

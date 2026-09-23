@@ -2,33 +2,34 @@
 Copyright (C) 2023-2026 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { RefreshCw, RotateCcw } from 'lucide-react'
-import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
-
-import { ConfirmDialog } from '@/components/confirm-dialog'
-import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
 
-import {
-  applyBackendUpdate,
-  checkBackendUpdate,
-  getBackendUpdateStatus,
-  rollbackBackendUpdate,
-} from '../api'
+import { getBackendDownloadJob, getBackendUpdateStatus } from '../api'
 import { SettingsForm } from '../components/settings-form-layout'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useResetForm } from '../hooks/use-reset-form'
-import { useUpdateOption } from '../hooks/use-update-option'
+import { UpdateDownloadCard } from '../components/update-download-card'
+import { BackendUpdateActions } from './backend-update-actions'
 import {
   BackendDownloadProxyField,
   BackendManifestUrlField,
@@ -36,30 +37,34 @@ import {
 } from './backend-settings-fields'
 import { createBackendSchema } from './backend-settings-schema'
 import { VersionValue } from './backend-settings-status'
+import { useBackendRestartWatch } from './use-backend-restart'
+import { useBackendUpdateActions } from './use-backend-update-actions'
+
+const TRANSFER_STATES = [
+  'fetching',
+  'downloading',
+  'verifying',
+  'installing',
+] as const
 
 type BackendSettingsSectionProps = {
   defaultManifestUrl: string
   defaultDownloadProxy: string
 }
 
-type PendingAction = 'apply' | 'rollback' | null
 export function BackendSettingsSection(props: BackendSettingsSectionProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const updateOption = useUpdateOption()
-  const [pendingAction, setPendingAction] = useState<PendingAction>(null)
-  const [checking, setChecking] = useState(false)
-  const [latestCheckedVersion, setLatestCheckedVersion] = useState('')
-  const schema = createBackendSchema(t)
-  const defaultValues = {
+
+  const defaults = {
     manifestUrl: props.defaultManifestUrl ?? '',
     downloadProxy: props.defaultDownloadProxy ?? '',
   }
   const form = useForm<BackendFormValues>({
-    resolver: zodResolver(schema),
-    defaultValues,
+    resolver: zodResolver(createBackendSchema(t)),
+    defaultValues: defaults,
   })
-  useResetForm(form, defaultValues)
+  useResetForm(form, defaults)
 
   const statusQuery = useQuery({
     queryKey: ['backend-update-status'],
@@ -67,133 +72,114 @@ export function BackendSettingsSection(props: BackendSettingsSectionProps) {
     refetchInterval: 30_000,
   })
   const status = statusQuery.data?.success ? statusQuery.data.data : undefined
+  const stagedVersion = status?.pending_version || undefined
 
-  const saveSettings = async (values: BackendFormValues) => {
-    const updates = [
-      ...(values.manifestUrl.trim() !== props.defaultManifestUrl.trim()
-        ? [{ key: 'backend_setting.manifest_url', value: values.manifestUrl.trim() }]
-        : []),
-      ...(values.downloadProxy.trim() !== props.defaultDownloadProxy.trim()
-        ? [{ key: 'backend_setting.download_proxy', value: values.downloadProxy.trim() }]
-        : []),
-    ]
-    for (const update of updates) {
-      const response = await updateOption.mutateAsync(update)
-      if (!response.success) return false
-    }
-    return true
-  }
+  const refresh = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['backend-update-status'] })
+    await queryClient.invalidateQueries({ queryKey: ['backend-download-job'] })
+  }, [queryClient])
 
-  const onSubmit = async (values: BackendFormValues) => {
-    const normalized = {
-      manifestUrl: values.manifestUrl.trim(),
-      downloadProxy: values.downloadProxy.trim(),
-    }
-    if (await saveSettings(normalized)) form.reset(normalized)
-  }
+  const { restarting, seconds, begin } = useBackendRestartWatch(refresh)
 
-  const handleCheck = async () => {
-    setChecking(true)
-    try {
-      const saved = await saveSettings({
-        manifestUrl: form.getValues('manifestUrl').trim(),
-        downloadProxy: form.getValues('downloadProxy').trim(),
-      })
-      if (!saved) return
-      const response = await checkBackendUpdate()
-      if (!response.success || !response.data) {
-        toast.error(response.message || t('Failed to check backend updates'))
-        return
-      }
-      setLatestCheckedVersion(response.data.latest_version)
-      await queryClient.invalidateQueries({ queryKey: ['backend-update-status'] })
-      toast.success(
-        response.data.update_available
-          ? t('A backend update is available')
-          : t('Backend is up to date')
-      )
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('Failed to check backend updates'))
-    } finally {
-      setChecking(false)
-    }
-  }
+  const actions = useBackendUpdateActions({ form, defaults, refresh, beginRestart: begin })
 
-  const handleAction = async () => {
-    if (!pendingAction) return
-    try {
-      const response =
-        pendingAction === 'apply'
-          ? await applyBackendUpdate()
-          : await rollbackBackendUpdate()
-      if (!response.success) {
-        toast.error(response.message || t('Backend operation failed'))
-        return
-      }
-      toast.success(t('Backend restart has been requested'))
-      await queryClient.invalidateQueries({ queryKey: ['backend-update-status'] })
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('Backend operation failed'))
-    } finally {
-      setPendingAction(null)
-    }
-  }
+  // Poll only while a transfer is running; an idle page stays quiet.
+  const jobQuery = useQuery({
+    queryKey: ['backend-download-job'],
+    queryFn: getBackendDownloadJob,
+    refetchInterval: (query) => {
+      const state = query.state.data?.data?.state
+      if (!state) return false
+      return (TRANSFER_STATES as readonly string[]).includes(state) ? 1_000 : false
+    },
+  })
+  const job = jobQuery.data?.success ? jobQuery.data.data : undefined
+  const transferActive = (TRANSFER_STATES as readonly string[]).includes(
+    job?.state ?? ''
+  )
 
   const managed = Boolean(status?.supported && status.supervised)
-  const operationDisabled = !managed || statusQuery.isLoading
 
   return (
-    <>
-      <SettingsSection title={t('Backend updates')}>
-        <Form {...form}>
-          <SettingsForm onSubmit={form.handleSubmit(onSubmit)} autoComplete='off'>
-            <SettingsPageFormActions
-              onSave={form.handleSubmit(onSubmit)}
-              isSaving={updateOption.isPending || checking}
-              saveLabel='Save backend settings'
-            />
-            <BackendManifestUrlField control={form.control} t={t} />
-            <BackendDownloadProxyField control={form.control} t={t} />
-          </SettingsForm>
-        </Form>
+    <SettingsSection title={t('Backend updates')}>
+      <Form {...form}>
+        <SettingsForm
+          onSubmit={form.handleSubmit(actions.handleSave)}
+          autoComplete='off'
+        >
+          <SettingsPageFormActions
+            onSave={form.handleSubmit(actions.handleSave)}
+            isSaving={actions.savingSettings || actions.checking}
+            saveLabel='Save backend settings'
+          />
+          <BackendManifestUrlField control={form.control} t={t} />
+          <BackendDownloadProxyField control={form.control} t={t} />
+        </SettingsForm>
+      </Form>
 
-        <div className='grid gap-4 md:grid-cols-2'>
-          <VersionValue label={t('Current backend')} value={status?.current_version} />
-          <VersionValue label={t('Latest checked backend')} value={latestCheckedVersion} />
-          <VersionValue label={t('Pending restart')} value={status?.pending_version} />
-          <VersionValue label={t('Previous backend')} value={status?.previous_version} />
-        </div>
+      <div className='grid gap-4 md:grid-cols-2'>
+        <VersionValue
+          label={t('Current backend')}
+          value={status?.current_version}
+        />
+        <VersionValue
+          label={t('Latest checked backend')}
+          value={actions.latestCheckedVersion}
+        />
+        <VersionValue label={t('Pending restart')} value={stagedVersion} />
+        <VersionValue
+          label={t('Previous backend')}
+          value={status?.previous_version}
+        />
+      </div>
 
-        {!managed && (
-          <p className='text-muted-foreground text-sm'>
-            {t('Backend self-update requires the launcher-enabled Docker image.')}
-          </p>
+      <UpdateDownloadCard
+        job={job}
+        staged={Boolean(stagedVersion)}
+        progressTitle={
+          job?.version
+            ? t('Downloading backend {{version}}', { version: job.version })
+            : t('Preparing backend download…')
+        }
+        readyTitle={
+          stagedVersion
+            ? t('Backend {{version}} is ready to activate', {
+                version: stagedVersion,
+              })
+            : t('A backend release is ready to activate')
+        }
+        readyHint={t(
+          'Restarting takes effect immediately and interrupts in-flight requests.'
         )}
-        <div className='flex flex-wrap gap-2'>
-          <Button type='button' variant='outline' onClick={handleCheck} disabled={checking}>
-            <RefreshCw data-icon='inline-start' className={checking ? 'animate-spin' : undefined} />
-            <span>{checking ? t('Checking backend...') : t('Check backend updates')}</span>
-          </Button>
-          <Button type='button' onClick={() => setPendingAction('apply')} disabled={operationDisabled}>
-            <RefreshCw data-icon='inline-start' />
-            <span>{t('Update and restart')}</span>
-          </Button>
-          <Button type='button' variant='destructive' onClick={() => setPendingAction('rollback')} disabled={operationDisabled || !status?.can_rollback}>
-            <RotateCcw data-icon='inline-start' />
-            <span>{t('Rollback and restart')}</span>
-          </Button>
-        </div>
-      </SettingsSection>
-
-      <ConfirmDialog
-        open={pendingAction !== null}
-        onOpenChange={(open) => !open && setPendingAction(null)}
-        title={pendingAction === 'apply' ? t('Confirm backend update') : t('Confirm backend rollback')}
-        desc={pendingAction === 'apply' ? t('The server will download a signed binary and restart.') : t('The server will restart using the previous backend version.')}
-        confirmText={pendingAction === 'apply' ? t('Update and restart') : t('Rollback and restart')}
-        destructive={pendingAction === 'rollback'}
-        handleConfirm={handleAction}
+        activateLabel={t('Restart and activate')}
+        discardLabel={t('Discard staged release')}
+        onActivate={actions.handleRestart}
+        onDiscard={actions.handleDiscard}
+        discarding={actions.discarding}
+        activating={
+          restarting
+            ? { label: t('Restarting the backend…'), seconds }
+            : undefined
+        }
       />
-    </>
+
+      {!managed && (
+        <p className='text-muted-foreground text-sm'>
+          {t('Backend self-update requires the launcher-enabled Docker image.')}
+        </p>
+      )}
+
+      <BackendUpdateActions
+        checking={actions.checking}
+        starting={actions.starting}
+        staging={actions.staging}
+        hasStagedRelease={Boolean(stagedVersion)}
+        canRollback={Boolean(status?.can_rollback)}
+        disabled={!managed || restarting || transferActive}
+        onCheck={actions.handleCheck}
+        onDownload={actions.handleDownload}
+        onRollback={actions.handleRollback}
+      />
+    </SettingsSection>
   )
 }

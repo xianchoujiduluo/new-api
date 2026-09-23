@@ -72,6 +72,9 @@ type BackendUpdater struct {
 	GOARCH             string
 	Supervised         bool
 	CandidateValidator func(context.Context, string, BackendManifest) error
+	// Reporter observes coarse download progress. It is optional and only set by
+	// the asynchronous download endpoint; the synchronous path leaves it nil.
+	Reporter BackendDownloadReporter
 
 	mu sync.Mutex
 }
@@ -230,11 +233,33 @@ func (u *BackendUpdater) Update(ctx context.Context, manifestURL string) (*Backe
 	if err != nil {
 		return nil, err
 	}
+	u.reportTarget(manifest.Version, manifest.Commit, artifact.Size)
 	changed, err := u.install(updateCtx, manifest, manifestBytes, artifact, artifactURL)
 	if err != nil {
 		return nil, err
 	}
 	return &BackendUpdateResult{Version: manifest.Version, Commit: manifest.Commit, Changed: changed}, nil
+}
+
+func (u *BackendUpdater) reportTarget(version, commit string, totalBytes int64) {
+	if u.Reporter == nil {
+		return
+	}
+	u.Reporter.Target(version, commit, totalBytes)
+}
+
+func (u *BackendUpdater) reportProgress(doneBytes, totalBytes int64) {
+	if u.Reporter == nil {
+		return
+	}
+	u.Reporter.Progress(doneBytes, totalBytes)
+}
+
+func (u *BackendUpdater) reportStage(stage BackendDownloadState) {
+	if u.Reporter == nil {
+		return
+	}
+	u.Reporter.Stage(stage, backendDownloadProgressMessage(stage))
 }
 
 func (u *BackendUpdater) loadManifest(ctx context.Context, rawURL string) (BackendManifest, []byte, BackendArtifact, string, error) {

@@ -87,3 +87,26 @@ func syncBackendDirectory(path string) error {
 	defer directory.Close()
 	return directory.Sync()
 }
+
+// DiscardPendingBackend removes a staged release that has not been activated
+// yet, so an accidental download can be dropped without restarting. The running
+// `current` release is never touched.
+func DiscardPendingBackend(root string) (bool, error) {
+	if strings.TrimSpace(root) == "" {
+		root = BackendUpdateDir()
+	}
+	pendingPath := filepath.Join(root, "pending")
+	if _, err := os.Lstat(pendingPath); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("读取待生效后端失败: %w", err)
+	}
+	if err := os.Remove(pendingPath); err != nil {
+		return false, fmt.Errorf("丢弃待生效后端失败: %w", err)
+	}
+	if err := syncBackendDirectory(root); err != nil {
+		return false, fmt.Errorf("同步后端更新目录失败: %w", err)
+	}
+	return true, nil
+}

@@ -64,6 +64,42 @@ export type BackendUpdateResult = {
   changed: boolean
 }
 
+/**
+ * Shared download lifecycle for the backend and frontend updaters. `ready`
+ * always means "staged on disk, not yet activated".
+ */
+export type UpdateDownloadState =
+  | 'idle'
+  | 'fetching'
+  | 'downloading'
+  | 'verifying'
+  | 'installing'
+  | 'extracting'
+  | 'ready'
+  | 'failed'
+
+export type UpdateDownloadProgress = {
+  state: UpdateDownloadState
+  version?: string
+  commit?: string
+  source?: string
+  bytes_done: number
+  bytes_total: number
+  percent: number
+  message?: string
+  error?: string
+  staged_at?: number
+  finished_at?: number
+}
+
+export type BackendDownloadJob = UpdateDownloadProgress
+
+export type FrontendDownloadJob = UpdateDownloadProgress
+
+export type FrontendStagedRelease = {
+  staged: boolean
+}
+
 export type BackendUpdateResponse<T> = {
   success: boolean
   message: string

@@ -110,6 +110,7 @@ func (u *BackendUpdater) install(ctx context.Context, manifest BackendManifest, 
 	if err := u.downloadBinary(ctx, rawURL, candidate, artifact); err != nil {
 		return false, err
 	}
+	u.reportStage(BackendDownloadVerifying)
 	validator := u.CandidateValidator
 	if validator == nil {
 		validator = validateBackendCandidate
@@ -117,6 +118,7 @@ func (u *BackendUpdater) install(ctx context.Context, manifest BackendManifest, 
 	if err := validator(ctx, candidate, manifest); err != nil {
 		return false, err
 	}
+	u.reportStage(BackendDownloadInstalling)
 	if err := os.WriteFile(filepath.Join(staging, "manifest.json"), manifestBytes, 0644); err != nil {
 		return false, fmt.Errorf("保存后端更新清单失败: %w", err)
 	}
@@ -157,16 +159,39 @@ func (u *BackendUpdater) downloadBinary(ctx context.Context, rawURL, destination
 	if response.ContentLength > artifact.Size {
 		return fmt.Errorf("后端更新制品超过清单声明的大小")
 	}
-	return writeBackendCandidate(response.Body, destination, artifact)
+	return writeBackendCandidate(response.Body, destination, artifact, func(done int64) {
+		u.reportProgress(done, artifact.Size)
+	})
 }
 
-func writeBackendCandidate(source io.Reader, destination string, artifact BackendArtifact) error {
+// progressReader counts bytes as they stream through so the download path can
+// report progress without buffering the artifact.
+type progressReader struct {
+	r          io.Reader
+	done       int64
+	onProgress func(int64)
+}
+
+func (p *progressReader) Read(buffer []byte) (int, error) {
+	read, err := p.r.Read(buffer)
+	if read > 0 {
+		p.done += int64(read)
+		p.onProgress(p.done)
+	}
+	return read, err
+}
+
+func writeBackendCandidate(source io.Reader, destination string, artifact BackendArtifact, onProgress func(int64)) error {
 	output, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0755)
 	if err != nil {
 		return fmt.Errorf("创建后端候选文件失败: %w", err)
 	}
 	hasher := sha256.New()
-	written, copyErr := io.Copy(io.MultiWriter(output, hasher), io.LimitReader(source, artifact.Size+1))
+	reader := io.LimitReader(source, artifact.Size+1)
+	if onProgress != nil {
+		reader = &progressReader{r: reader, onProgress: onProgress}
+	}
+	written, copyErr := io.Copy(io.MultiWriter(output, hasher), reader)
 	chmodErr := output.Chmod(0755)
 	syncErr := output.Sync()
 	closeErr := output.Close()

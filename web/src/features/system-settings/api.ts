@@ -21,6 +21,8 @@ import { api } from '@/lib/api'
 import type {
   ConfirmPaymentComplianceResponse,
   BackendCheckResult,
+  BackendDownloadJob,
+  FrontendDownloadJob,
   BackendUpdateResponse,
   BackendUpdateResult,
   BackendUpdateStatus,
@@ -45,10 +47,37 @@ export async function updateSystemOption(request: UpdateOptionRequest) {
   return res.data
 }
 
-export async function updateFrontend() {
-  const res = await api.post<UpdateOptionResponse>(
-    '/api/frontend/update',
+export async function startFrontendDownload() {
+  const res = await api.post<BackendUpdateResponse<FrontendDownloadJob>>(
+    '/api/frontend/download',
     undefined,
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+/** Polls frontend staging progress; falls back to the on-disk staged release. */
+export async function getFrontendDownloadJob() {
+  const res = await api.get<BackendUpdateResponse<FrontendDownloadJob>>(
+    '/api/frontend/download',
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+/** Swaps the staged frontend into place; a directory rename, so it is instant. */
+export async function activateFrontend() {
+  const res = await api.post<BackendUpdateResponse<null>>(
+    '/api/frontend/activate',
+    undefined,
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+export async function discardFrontendDownload() {
+  const res = await api.delete<BackendUpdateResponse<{ discarded: boolean }>>(
+    '/api/frontend/staging',
     { skipBusinessError: true }
   )
   return res.data
@@ -71,15 +100,47 @@ export async function checkBackendUpdate() {
   return res.data
 }
 
-export async function applyBackendUpdate() {
-  const res = await api.post<BackendUpdateResponse<BackendUpdateResult>>(
-    '/api/backend-update/apply',
+export async function startBackendDownload() {
+  const res = await api.post<BackendUpdateResponse<BackendDownloadJob>>(
+    '/api/backend-update/download',
     undefined,
     { skipBusinessError: true }
   )
   return res.data
 }
 
+/**
+ * Polls download progress. `skipBusinessError` keeps a `409` (already running)
+ * reporting the current job instead of throwing.
+ */
+export async function getBackendDownloadJob() {
+  const res = await api.get<BackendUpdateResponse<BackendDownloadJob>>(
+    '/api/backend-update/download',
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+/** Discards a staged release without restarting. */
+export async function discardBackendDownload() {
+  const res = await api.delete<BackendUpdateResponse<{ discarded: boolean }>>(
+    '/api/backend-update/pending',
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+/** Hands control to the launcher, which activates the staged release. */
+export async function restartBackend() {
+  const res = await api.post<BackendUpdateResponse<null>>(
+    '/api/backend-update/restart',
+    undefined,
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+/** Stages the previous release for activation; a separate restart is required. */
 export async function rollbackBackendUpdate() {
   const res = await api.post<BackendUpdateResponse<BackendUpdateResult>>(
     '/api/backend-update/rollback',
