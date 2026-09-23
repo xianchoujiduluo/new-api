@@ -125,11 +125,11 @@ func setupRelayRouterTestDB(t *testing.T) {
 	})
 }
 
-// TestSetRelayRouterRegistersOpenAIResponsesEndpoint guards the client entry
-// point that Responses-only clients (Codex) require. The route was absent for a
-// long time, so a refactor that drops it silently turns those clients into a
-// 404 through the web-router catch-all.
-func TestSetRelayRouterRegistersOpenAIResponsesEndpoint(t *testing.T) {
+// TestSetRelayRouterRegistersResponsesCompactEndpoint guards the compaction
+// entry point. POST /v1/responses is deliberately NOT registered here: it comes
+// from the plugin protocol registry (jsplugin.HostProtocols) via
+// SetTaskPluginProtocolRouter, and registering it twice panics at startup.
+func TestSetRelayRouterRegistersResponsesCompactEndpoint(t *testing.T) {
 	setupRelayRouterTestDB(t)
 
 	engine := gin.New()
@@ -139,6 +139,35 @@ func TestSetRelayRouterRegistersOpenAIResponsesEndpoint(t *testing.T) {
 	for _, route := range engine.Routes() {
 		actual[route.Method+" "+route.Path] = struct{}{}
 	}
-	assert.Contains(t, actual, http.MethodPost+" /v1/responses")
 	assert.Contains(t, actual, http.MethodPost+" /v1/responses/compact")
+	assert.NotContains(t, actual, http.MethodPost+" /v1/responses")
+}
+
+// TestSetRouterRegistersWithoutDuplicatePanic guards against a path being
+// registered twice. Gin panics during registration, before the server starts,
+// which crash-loops the process; per-router tests cannot see it because only the
+// full SetRouter composition registers every route in the real order.
+//
+// This is why /v1/responses is asserted here: it comes from the plugin protocol
+// registry (jsplugin.HostProtocols), not from the relay router, so adding it to
+// the relay router too is a duplicate.
+func TestSetRouterRegistersWithoutDuplicatePanic(t *testing.T) {
+	setupRelayRouterTestDB(t)
+	gin.SetMode(gin.TestMode)
+
+	t.Setenv("FRONTEND_BASE_URL", "/frontend-under-test")
+	originalIsMasterNode := common.IsMasterNode
+	common.IsMasterNode = false
+	t.Cleanup(func() { common.IsMasterNode = originalIsMasterNode })
+
+	engine := gin.New()
+	require.NotPanics(t, func() { SetRouter(engine, WebAssets{}) })
+
+	registered := 0
+	for _, route := range engine.Routes() {
+		if route.Method == http.MethodPost && route.Path == "/v1/responses" {
+			registered++
+		}
+	}
+	assert.Equal(t, 1, registered, "/v1/responses must be registered exactly once")
 }
