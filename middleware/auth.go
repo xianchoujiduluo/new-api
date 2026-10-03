@@ -407,14 +407,24 @@ func TokenAuth() func(c *gin.Context) {
 			if strings.HasPrefix(key, "Bearer ") || strings.HasPrefix(key, "bearer ") {
 				key = strings.TrimSpace(key[7:])
 			}
-			key = strings.TrimPrefix(key, "sk-")
-			parts = strings.Split(key, "-")
-			key = parts[0]
-		} else {
-			key = strings.TrimPrefix(key, "sk-")
-			parts = strings.Split(key, "-")
-			key = parts[0]
 		}
+		// Capture the credential exactly as received, before the "sk-" prefix and
+		// the channel-pin suffix are stripped, so the diagnostic below can show
+		// what the client sent next to what is looked up.
+		credential := key
+		key = strings.TrimPrefix(key, "sk-")
+		parts = strings.Split(key, "-")
+		key = parts[0]
+
+		// A key of the form "<key>-<channelId>" is split so the suffix can pin a
+		// channel. The lookup then uses only the first segment, so a 401 reports
+		// just "record not found" and the truncation stays invisible. Log both
+		// values (masked) whenever a suffix is present.
+		if len(parts) > 1 {
+			logger.LogDebug(c, "token key carried a channel-pin suffix: sent=%s looked_up=%s",
+				model.MaskTokenKey(credential), model.MaskTokenKey(key))
+		}
+
 		token, err := model.ValidateUserToken(key)
 		if token != nil {
 			id := c.GetInt("id")

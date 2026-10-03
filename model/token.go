@@ -250,7 +250,7 @@ func ValidateUserToken(key string) (token *Token, err error) {
 		}
 		return token, nil
 	}
-	common.SysLog("ValidateUserToken: failed to get token: " + err.Error())
+	common.SysLog(fmt.Sprintf("ValidateUserToken: failed to get token (key=%s, len=%d): %s", MaskTokenKey(key), len(key), err.Error()))
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrTokenInvalid
 	}
