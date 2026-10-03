@@ -17,8 +17,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// setupTokenAuthTestDB wires an in-memory token store and captures the gin log
-// writers so the diagnostic lines can be asserted.
+// setupTokenAuthTestDB captures the gin log writers, which is where both
+// common.SysLog and logger.LogDebug actually write.
 func setupTokenAuthTestDB(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	previousDB := model.DB
@@ -31,8 +31,6 @@ func setupTokenAuthTestDB(t *testing.T) *bytes.Buffer {
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.Token{}, &model.User{}))
 
-	// Both common.SysLog and logger.LogDebug write through the gin writers, not
-	// the standard logger, so capture there.
 	var logs bytes.Buffer
 	previousWriter := gin.DefaultWriter
 	previousErrorWriter := gin.DefaultErrorWriter
@@ -57,43 +55,51 @@ func setupTokenAuthTestDB(t *testing.T) *bytes.Buffer {
 	return &logs
 }
 
-func runTokenAuth(t *testing.T, authorization string) *httptest.ResponseRecorder {
+func runTokenAuth(t *testing.T, headers map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-	if authorization != "" {
-		c.Request.Header.Set("Authorization", authorization)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	for k, v := range headers {
+		c.Request.Header.Set(k, v)
 	}
 	TokenAuth()(c)
 	return recorder
 }
 
-// TestTokenAuthLogsChannelPinSuffixTruncation pins that the credential sent by
-// the client and the value actually looked up are both reported when a
-// channel-pin suffix forces the key to be truncated.
-//
-// The diagnostic is emitted before any database access, so it is asserted on its
-// own; the lookup that follows cannot be set up here because commonKeyCol is
-// initialised by the unexported initCol in package model. The real lookup path
-// is covered by TestValidateUserTokenLogsMaskedKey in package model.
-func TestTokenAuthLogsChannelPinSuffixTruncation(t *testing.T) {
+// TestTokenAuthLogsClientCredentialVerbatim pins that a rejected request reports
+// the credential exactly as the client sent it, alongside the value actually
+// looked up. Without the raw value a mismatch caused by parsing (the "sk-" strip
+// and the channel-pin suffix) cannot be distinguished from a genuinely unknown
+// token.
+func TestTokenAuthLogsClientCredentialVerbatim(t *testing.T) {
 	logs := setupTokenAuthTestDB(t)
 
-	runTokenAuth(t, "Bearer sk-abcdefghijklmnop-42")
+	runTokenAuth(t, map[string]string{"Authorization": "Bearer sk-abcdefghijklmnop-42"})
 
 	output := logs.String()
-	require.Contains(t, output, "token key carried a channel-pin suffix")
+	require.Contains(t, output, "TokenAuth credential rejected:")
 
-	sent := strings.Index(output, "sent=")
-	lookedUp := strings.Index(output, "looked_up=")
-	require.GreaterOrEqual(t, sent, 0, "diagnostic must report the client-supplied key")
-	require.GreaterOrEqual(t, lookedUp, 0, "diagnostic must report the queried key")
+	raw := strings.Index(output, `raw_authorization="Bearer sk-abcdefghijklmnop-42"`)
+	assert.GreaterOrEqual(t, raw, 0, "the header must be logged verbatim, including the scheme")
+	// looked_up is the stripped, suffix-truncated value that is actually queried.
+	assert.Contains(t, output, `looked_up="abcdefghijklmnop"`)
+	assert.Contains(t, output, "len=16")
+}
 
-	// Both values are reported in full and must differ: the suffix was dropped.
-	// sent keeps the original "sk-" prefix; looked_up is the stripped, truncated
-	// value that is actually queried.
-	assert.Contains(t, output, "sent=sk-abcdefghijklmnop-42")
-	assert.Contains(t, output, "looked_up=abcdefghijklmnop")
+// TestTokenAuthLogsMjSecretFallbackVerbatim covers the midjourney-proxy path,
+// where the credential comes from a different header.
+func TestTokenAuthLogsMjSecretFallbackVerbatim(t *testing.T) {
+	logs := setupTokenAuthTestDB(t)
+
+	runTokenAuth(t, map[string]string{
+		"Authorization": "midjourney-proxy",
+		"mj-api-secret": "sk-mjsecretvalue",
+	})
+
+	output := logs.String()
+	require.Contains(t, output, "TokenAuth credential rejected:")
+	assert.Contains(t, output, `raw_mj_secret="sk-mjsecretvalue"`)
+	assert.Contains(t, output, `looked_up="mjsecretvalue"`)
 }

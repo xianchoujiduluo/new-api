@@ -397,30 +397,23 @@ func TokenAuth() func(c *gin.Context) {
 				c.Request.Header.Set("Authorization", "Bearer "+xGoogKey)
 			}
 		}
-		key := c.Request.Header.Get("Authorization")
+		// 排查用：原样保留客户端送来的值，不做任何剥离，便于与实际查询值比对。
+		rawAuthorization := c.Request.Header.Get("Authorization")
+		rawMjSecret := c.Request.Header.Get("mj-api-secret")
+		key := rawAuthorization
 		parts := make([]string, 0)
 		if strings.HasPrefix(key, "Bearer ") || strings.HasPrefix(key, "bearer ") {
 			key = strings.TrimSpace(key[7:])
 		}
 		if key == "" || key == "midjourney-proxy" {
-			key = c.Request.Header.Get("mj-api-secret")
+			key = rawMjSecret
 			if strings.HasPrefix(key, "Bearer ") || strings.HasPrefix(key, "bearer ") {
 				key = strings.TrimSpace(key[7:])
 			}
 		}
-		// Capture the credential exactly as received, before the "sk-" prefix and
-		// the channel-pin suffix are stripped, so the diagnostic below can show
-		// what the client sent next to what is looked up.
-		credential := key
 		key = strings.TrimPrefix(key, "sk-")
 		parts = strings.Split(key, "-")
 		key = parts[0]
-
-		// 排查用：带渠道固定后缀时输出客户端原值与实际查询值（均为原文）。
-		if len(parts) > 1 {
-			logger.LogDebug(c, "token key carried a channel-pin suffix: sent=%s looked_up=%s",
-				credential, key)
-		}
 
 		token, err := model.ValidateUserToken(key)
 		if token != nil {
@@ -430,6 +423,13 @@ func TokenAuth() func(c *gin.Context) {
 			}
 		}
 		if err != nil {
+			// 排查用：鉴权失败时输出客户端原始凭据与实际查询值（均为原文）。
+			// 前者是 header 原样内容，后者是剥离 "Bearer "、"sk-" 与渠道固定后缀后
+			// 真正拿去查库的值；两者不一致时即可定位到解析环节。
+			// 仅在失败时输出，成功请求不产生凭据日志。
+			common.SysLog(fmt.Sprintf(
+				"TokenAuth credential rejected: raw_authorization=%q raw_mj_secret=%q looked_up=%q len=%d",
+				rawAuthorization, rawMjSecret, key, len(key)))
 			if errors.Is(err, model.ErrDatabase) {
 				common.SysLog("TokenAuth ValidateUserToken database error: " + err.Error())
 				abortWithOpenAiMessage(c, http.StatusInternalServerError,
