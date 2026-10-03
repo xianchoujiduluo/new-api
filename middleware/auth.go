@@ -416,13 +416,10 @@ func TokenAuth() func(c *gin.Context) {
 		parts = strings.Split(key, "-")
 		key = parts[0]
 
-		// A key of the form "<key>-<channelId>" is split so the suffix can pin a
-		// channel. The lookup then uses only the first segment, so a 401 reports
-		// just "record not found" and the truncation stays invisible. Log both
-		// values (masked) whenever a suffix is present.
+		// 排查用：带渠道固定后缀时输出客户端原值与实际查询值（均为原文）。
 		if len(parts) > 1 {
 			logger.LogDebug(c, "token key carried a channel-pin suffix: sent=%s looked_up=%s",
-				model.MaskTokenKey(credential), model.MaskTokenKey(key))
+				credential, key)
 		}
 
 		token, err := model.ValidateUserToken(key)

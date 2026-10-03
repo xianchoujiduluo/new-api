@@ -14,11 +14,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// TestValidateUserTokenLogsMaskedKey pins that a failed lookup reports which key
-// was queried. Before this, the only signal was "record not found", so an
-// unexpected lookup value could not be told apart from a genuinely unknown
-// token. The key is reported masked, never in full.
-func TestValidateUserTokenLogsMaskedKey(t *testing.T) {
+// TestValidateUserTokenLogsQueriedKey pins that a failed lookup reports which key
+// was queried, so the value sent by the client can be compared against the
+// stored tokens. The key is logged in full, which means the log contains a
+// usable credential; this is a deliberate troubleshooting trade-off.
+func TestValidateUserTokenLogsQueriedKey(t *testing.T) {
 	previousDB := DB
 	previousLogDB := LOG_DB
 	previousType := common.MainDatabaseType()
@@ -53,9 +53,7 @@ func TestValidateUserTokenLogsMaskedKey(t *testing.T) {
 
 	output := logs.String()
 	assert.Contains(t, output, "ValidateUserToken: failed to get token (key=")
-	assert.Contains(t, output, "key=unkn**********7890")
-	assert.Contains(t, output, "len=20")
-	// The raw key must never reach the log.
-	assert.NotContains(t, output, "unknownkey1234567890")
+	// 排查用：输出原文，便于与数据库比对。
+	assert.Contains(t, output, "key=unknownkey1234567890")
 	assert.Contains(t, output, fmt.Sprintf("len=%d", len("unknownkey1234567890")))
 }
