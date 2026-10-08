@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/proxy_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
@@ -348,6 +349,27 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "proxy_setting.proxies":
+		var entries []proxy_setting.Entry
+		if err = common.UnmarshalJsonStr(option.Value.(string), &entries); err != nil {
+			common.ApiErrorMsg(c, "代理配置必须是条目数组: "+err.Error())
+			return
+		}
+		if err = proxy_setting.ValidateEntries(entries); err != nil {
+			common.ApiErrorMsg(c, err.Error())
+			return
+		}
+		// A removed entry would leave its channels resolving to no proxy, which
+		// silently turns them into direct connections. Refuse instead.
+		references, refErr := model.ChannelProxyRefs()
+		if refErr != nil {
+			common.ApiError(c, refErr)
+			return
+		}
+		if missing := proxy_setting.MissingReferences(entries, references); len(missing) > 0 {
+			common.ApiErrorMsg(c, "以下代理仍被渠道引用，无法删除："+strings.Join(missing, ", "))
+			return
+		}
 	case "billing_setting.billing_expr":
 		expressions := make(map[string]string)
 		if err = common.UnmarshalJsonStr(option.Value.(string), &expressions); err != nil {
@@ -416,6 +438,12 @@ func UpdateOption(c *gin.Context) {
 		}
 	}
 	err = model.UpdateOption(option.Key, option.Value.(string))
+	if err == nil && option.Key == proxy_setting.ProxySettingKey {
+		// Cached HTTP clients are keyed by proxy URL, so editing a registry entry
+		// would otherwise keep using the previous proxy until a channel update
+		// happens to evict it.
+		service.ResetProxyClientCache()
+	}
 	if err != nil {
 		common.ApiError(c, err)
 		return

@@ -11,10 +11,16 @@ import (
 )
 
 type ChannelSettings struct {
-	TaskPluginKey          string `json:"task_plugin_key,omitempty"`
-	ForceFormat            bool   `json:"force_format,omitempty"`
-	ThinkingToContent      bool   `json:"thinking_to_content,omitempty"`
-	Proxy                  string `json:"proxy"`
+	TaskPluginKey     string `json:"task_plugin_key,omitempty"`
+	ForceFormat       bool   `json:"force_format,omitempty"`
+	ThinkingToContent bool   `json:"thinking_to_content,omitempty"`
+	Proxy             string `json:"proxy"`
+	// ProxyRef references an entry in the shared proxy registry by its stable id.
+	// When set it takes precedence over Proxy, so editing the registry entry
+	// applies to every channel that references it. Proxy stays the manual form:
+	// existing channels keep working without migration, and a channel with an
+	// empty ProxyRef uses Proxy verbatim.
+	ProxyRef               string `json:"proxy_ref,omitempty"`
 	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`

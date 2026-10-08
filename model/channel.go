@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/QuantumNous/new-api/setting/proxy_setting"
 	"math/rand"
 	"strings"
 	"sync"
@@ -1010,7 +1011,40 @@ func (channel *Channel) ValidateSettings() error {
 	return nil
 }
 
-func (channel *Channel) GetSetting() dto.ChannelSettings {
+// ChannelProxyRefs counts how many channels reference each proxy registry id.
+//
+// Only the setting column is read, so the check stays cheap enough to run on
+// every registry save. Rows whose settings cannot be parsed are skipped: an
+// unparseable channel is already reported elsewhere and must not block a save.
+func ChannelProxyRefs() (map[string]int, error) {
+	var rows []string
+	err := DB.Model(&Channel{}).
+		Where("setting IS NOT NULL AND setting <> ''").
+		Pluck("setting", &rows).Error
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int)
+	for _, raw := range rows {
+		setting := dto.ChannelSettings{}
+		if err := common.UnmarshalJsonStr(raw, &setting); err != nil {
+			continue
+		}
+		if ref := strings.TrimSpace(setting.ProxyRef); ref != "" {
+			counts[ref]++
+		}
+	}
+	return counts, nil
+}
+
+// GetRawSetting returns the persisted settings exactly as stored, with ProxyRef
+// left unresolved.
+//
+// Read-modify-write callers must use this instead of GetSetting: resolving first
+// copies the referenced URL into Proxy, and writing that back would leave both
+// Proxy and ProxyRef populated, so the manual value would be silently shadowed by
+// the reference.
+func (channel *Channel) GetRawSetting() dto.ChannelSettings {
 	setting := dto.ChannelSettings{}
 	if channel.Setting != nil && *channel.Setting != "" {
 		err := common.Unmarshal([]byte(*channel.Setting), &setting)
@@ -1018,6 +1052,22 @@ func (channel *Channel) GetSetting() dto.ChannelSettings {
 			common.SysLog(fmt.Sprintf("failed to unmarshal setting: channel_id=%d, error=%v", channel.Id, err))
 			channel.Setting = nil // 清空设置以避免后续错误
 			_ = channel.Save()    // 保存修改
+		}
+	}
+	return setting
+}
+
+// GetSetting returns settings for consumption, with ProxyRef resolved into Proxy.
+//
+// Resolution happens here so every consumer keeps reading ChannelSettings.Proxy
+// and picks up registry edits without a per-call-site change. A reference whose
+// entry was removed or disabled leaves Proxy empty, which means a direct
+// connection, exactly like a channel without a proxy.
+func (channel *Channel) GetSetting() dto.ChannelSettings {
+	setting := channel.GetRawSetting()
+	if ref := strings.TrimSpace(setting.ProxyRef); ref != "" {
+		if resolved, _ := proxy_setting.ResolveURL(ref); resolved != "" {
+			setting.Proxy = resolved
 		}
 	}
 	return setting

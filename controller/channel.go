@@ -1233,6 +1233,10 @@ type fetchModelsRequest struct {
 	AdvancedCustom *string `json:"advanced_custom"`
 	HeaderOverride *string `json:"header_override"`
 	Proxy          *string `json:"proxy"`
+	// ProxyRef selects an entry in the shared proxy registry. Sending it (even as
+	// an empty string) replaces the channel's proxy configuration, so a picker can
+	// switch between a registry entry and a manually typed URL.
+	ProxyRef *string `json:"proxy_ref"`
 }
 
 func buildAdvancedCustomModelPreviewChannel(req fetchModelsRequest) (*model.Channel, error) {
@@ -1291,9 +1295,28 @@ func buildAdvancedCustomModelPreviewChannel(req fetchModelsRequest) (*model.Chan
 		}
 		channel.HeaderOverride = &rawHeaderOverride
 	}
-	if req.Proxy != nil {
-		channelSettings := channel.GetSetting()
-		channelSettings.Proxy = strings.TrimSpace(*req.Proxy)
+	if req.Proxy != nil || req.ProxyRef != nil {
+		// Read the raw settings: GetSetting resolves ProxyRef into Proxy, and
+		// persisting that would leave both fields set with the reference winning.
+		channelSettings := channel.GetRawSetting()
+		proxyRef := strings.TrimSpace(channelSettings.ProxyRef)
+		if req.ProxyRef != nil {
+			proxyRef = strings.TrimSpace(*req.ProxyRef)
+		}
+		proxy := strings.TrimSpace(channelSettings.Proxy)
+		if req.Proxy != nil {
+			proxy = strings.TrimSpace(*req.Proxy)
+		}
+		// The two forms are mutually exclusive: a reference resolves to a URL at
+		// read time, so keeping a stale manual value alongside it would let the
+		// reference silently shadow whatever the operator typed.
+		if proxyRef != "" {
+			channelSettings.ProxyRef = proxyRef
+			channelSettings.Proxy = ""
+		} else {
+			channelSettings.ProxyRef = ""
+			channelSettings.Proxy = proxy
+		}
 		channel.SetSetting(channelSettings)
 	}
 
