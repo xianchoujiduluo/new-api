@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -19,8 +20,10 @@ import (
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestValidateChannelProxy(t *testing.T) {
@@ -465,4 +468,75 @@ func TestTestAllChannelsRejectsExistingActiveTask(t *testing.T) {
 	require.Equal(t, http.StatusConflict, recorder.Code)
 	require.Contains(t, recorder.Body.String(), existing.TaskID)
 	require.Contains(t, recorder.Body.String(), "已有通道测试任务正在运行或等待中")
+}
+
+// TestSelectChannelsForAutomaticTestHonorsPerChannelInterval pins the per-channel
+// cadence: a channel that sets its own interval is only selected once that
+// interval has elapsed, while a channel without an override keeps following the
+// global interval. Channels never tested are always due.
+func TestSelectChannelsForAutomaticTestHonorsPerChannelInterval(t *testing.T) {
+	monitorSetting := operation_setting.GetMonitorSetting()
+	previousMinutes := monitorSetting.AutoTestChannelMinutes
+	monitorSetting.AutoTestChannelMinutes = 10
+	t.Cleanup(func() { monitorSetting.AutoTestChannelMinutes = previousMinutes })
+
+	now := common.GetTimestamp()
+	override := func(minutes float64) string {
+		return fmt.Sprintf(`{"auto_test_minutes_override":%g}`, minutes)
+	}
+
+	channels := []*model.Channel{
+		// No override, half the global interval elapsed: not due.
+		{Id: 1, Status: common.ChannelStatusEnabled, TestTime: now - 5*60, OtherSettings: override(0)},
+		// No override, global interval elapsed: due.
+		{Id: 2, Status: common.ChannelStatusEnabled, TestTime: now - 11*60, OtherSettings: override(0)},
+		// Shorter than global, its own interval elapsed: due earlier than the rest.
+		{Id: 3, Status: common.ChannelStatusEnabled, TestTime: now - 2*60, OtherSettings: override(1)},
+		// Longer than global, its own interval not elapsed: not due.
+		{Id: 4, Status: common.ChannelStatusEnabled, TestTime: now - 20*60, OtherSettings: override(60)},
+		// Never tested: due immediately.
+		{Id: 5, Status: common.ChannelStatusEnabled},
+	}
+
+	selected := selectChannelsForAutomaticTest(channels, operation_setting.ChannelTestModeScheduledAll)
+
+	ids := make([]int, 0, len(selected))
+	for _, channel := range selected {
+		ids = append(ids, channel.Id)
+	}
+	assert.Equal(t, []int{2, 3, 5}, ids)
+}
+
+// TestChannelTestHandlerIntervalFollowsShortestOverride pins that the scheduler
+// tick shrinks to the shortest channel interval, otherwise a channel asking for a
+// faster check could never be selected on time.
+func TestChannelTestHandlerIntervalFollowsShortestOverride(t *testing.T) {
+	monitorSetting := operation_setting.GetMonitorSetting()
+	previousMinutes := monitorSetting.AutoTestChannelMinutes
+	monitorSetting.AutoTestChannelMinutes = 10
+	t.Cleanup(func() { monitorSetting.AutoTestChannelMinutes = previousMinutes })
+
+	// Bind an empty channel table and drop the cached minimum, otherwise the
+	// result depends on whatever database another test left behind.
+	previousDB := model.DB
+	previousType := common.MainDatabaseType()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Channel{}))
+	model.DB = db
+	common.SetMainDatabaseType(common.DatabaseTypeSQLite)
+	model.InvalidateChannelAutoTestMinutesCache()
+	t.Cleanup(func() {
+		model.DB = previousDB
+		common.SetMainDatabaseType(previousType)
+		model.InvalidateChannelAutoTestMinutesCache()
+	})
+
+	var handler channelTestHandler
+	assert.Equal(t, 10*time.Minute, handler.Interval(), "no override must keep the global interval")
+
+	override := `{"auto_test_minutes_override":2}`
+	require.NoError(t, db.Create(&model.Channel{Name: "c", Key: "k", OtherSettings: override}).Error)
+	model.InvalidateChannelAutoTestMinutesCache()
+	assert.Equal(t, 2*time.Minute, handler.Interval(), "the tick must shrink to the shortest override")
 }

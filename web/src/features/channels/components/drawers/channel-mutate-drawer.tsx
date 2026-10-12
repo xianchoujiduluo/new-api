@@ -120,6 +120,7 @@ import {
   parseChannelConnectionInfo,
   type ChannelConnectionInfo,
 } from '@/lib/channel-connection-info'
+import { getSystemOptions } from '@/features/system-settings/api'
 import { handleServerError } from '@/lib/handle-server-error'
 import { ROLE } from '@/lib/roles'
 import {
@@ -650,6 +651,26 @@ export function ChannelMutateDrawer({
     queryFn: async () => requireServerSuccess(await getChannel(channelId || 0)),
     enabled: isEditing && Boolean(channelId),
   })
+
+  // 共享代理注册表：供代理字段选择，而不是每次都手填 URL。
+  // 兼容后端可能返回 JSON 字符串或已解析数组两种形态。
+  const { data: systemOptions } = useQuery({
+    queryKey: ['proxy_setting_options'],
+    queryFn: async () => requireServerSuccess(await getSystemOptions()),
+  })
+  // /api/option/ 返回的是 {key, value}[]，value 是 JSON 字符串。
+  const proxyEntries = (() => {
+    const raw = systemOptions?.data?.find(
+      (option) => option.key === 'proxy_setting.proxies'
+    )?.value
+    if (!raw) return [] as { id: string; name: string; url: string }[]
+    try {
+      const list = JSON.parse(raw)
+      return Array.isArray(list) ? list : []
+    } catch {
+      return [] as { id: string; name: string; url: string }[]
+    }
+  })()
 
   // Fetch available groups
   const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
@@ -4292,16 +4313,70 @@ export function ChannelMutateDrawer({
                                 <FormItem>
                                   <FormLabel>{t('Proxy Address')}</FormLabel>
                                   <FormControl>
-                                    <Input
+                                    <Combobox
+                                      allowCustomValue
+                                      options={proxyEntries.map((entry) => ({
+                                        value: `ref:${entry.id}`,
+                                        label: `${entry.name} — ${entry.url}`,
+                                      }))}
+                                      value={
+                                        form.watch('proxy_ref')
+                                          ? `ref:${form.watch('proxy_ref')}`
+                                          : field.value || ''
+                                      }
+                                      onValueChange={(value) => {
+                                        if (value?.startsWith('ref:')) {
+                                          form.setValue(
+                                            'proxy_ref',
+                                            value.slice(4)
+                                          )
+                                          field.onChange('')
+                                          return
+                                        }
+                                        form.setValue('proxy_ref', '')
+                                        field.onChange(value ?? '')
+                                      }}
                                       placeholder={t(
                                         'socks5://user:pass@host:port'
                                       )}
-                                      {...field}
+                                      searchPlaceholder={t('Search...')}
                                     />
                                   </FormControl>
                                   <FormDescription>
                                     {t(
-                                      'Network proxy for this channel (supports HTTP, HTTPS, SOCKS5, and SOCKS5H)'
+                                      'Pick a shared proxy from the registry, or type a URL for this channel only.'
+                                    )}
+                                  </FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
+                              name='auto_test_minutes_override'
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>
+                                    {t('Auto test interval (minutes)')}
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type='number'
+                                      min={0}
+                                      step={1}
+                                      placeholder='0'
+                                      value={field.value ?? 0}
+                                      onChange={(event) =>
+                                        field.onChange(
+                                          Number(event.target.value) || 0
+                                        )
+                                      }
+                                    />
+                                  </FormControl>
+                                  <FormDescription>
+                                    {t(
+                                      'Leave 0 to follow the global interval. A positive value overrides it for this channel only, and can be shorter or longer.'
                                     )}
                                   </FormDescription>
                                   <FormMessage />

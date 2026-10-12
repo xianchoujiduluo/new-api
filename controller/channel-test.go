@@ -1112,6 +1112,12 @@ func runChannelTestTask(ctx context.Context, mode string, notify bool, report fu
 }
 
 func selectChannelsForAutomaticTest(channels []*model.Channel, mode string) []*model.Channel {
+	globalMinutes := operation_setting.GetMonitorSetting().AutoTestChannelMinutes
+	if globalMinutes <= 0 {
+		globalMinutes = 10
+	}
+	now := common.GetTimestamp()
+
 	selected := make([]*model.Channel, 0, len(channels))
 	for _, channel := range channels {
 		if channel.Status == common.ChannelStatusManuallyDisabled {
@@ -1121,6 +1127,17 @@ func selectChannelsForAutomaticTest(channels []*model.Channel, mode string) []*m
 			continue
 		}
 		if mode == operation_setting.ChannelTestModePassiveRecovery && channel.Status != common.ChannelStatusAutoDisabled {
+			continue
+		}
+		// Each channel is due on its own cadence. A zero override follows the
+		// global interval, so channels that never set one keep being tested at
+		// the configured rate. TestTime is written by the test itself, so a
+		// channel that has never been tested (or was just created) runs at once.
+		intervalMinutes := globalMinutes
+		if override := channel.GetOtherSettings().AutoTestMinutesOverride; override > 0 {
+			intervalMinutes = override
+		}
+		if channel.TestTime > 0 && float64(now-channel.TestTime) < intervalMinutes*60 {
 			continue
 		}
 		selected = append(selected, channel)

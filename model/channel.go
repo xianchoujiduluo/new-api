@@ -5,16 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/QuantumNous/new-api/setting/proxy_setting"
 	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/setting/proxy_setting"
 
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -1009,6 +1010,67 @@ func (channel *Channel) ValidateSettings() error {
 		}
 	}
 	return nil
+}
+
+// autoTestMinutesCache holds the smallest per-channel auto test override.
+//
+// The scheduler asks for the effective interval on every tick (about every 15
+// seconds), and answering it requires reading every channel's settings JSON, so
+// the result is cached briefly. A stale value only shifts a run by one tick.
+var (
+	autoTestMinutesMu       sync.Mutex
+	autoTestMinutesValue    float64
+	autoTestMinutesCachedAt time.Time
+)
+
+const autoTestMinutesCacheTTL = 30 * time.Second
+
+// MinChannelAutoTestMinutes returns the smallest non-zero per-channel auto test
+// interval, or 0 when no channel overrides the global interval. Callers combine
+// it with the global interval to get the tick at which every channel's own
+// schedule can be honored.
+func MinChannelAutoTestMinutes() float64 {
+	autoTestMinutesMu.Lock()
+	defer autoTestMinutesMu.Unlock()
+	if !autoTestMinutesCachedAt.IsZero() && time.Since(autoTestMinutesCachedAt) < autoTestMinutesCacheTTL {
+		return autoTestMinutesValue
+	}
+
+	var rows []string
+	err := DB.Model(&Channel{}).
+		Where("settings IS NOT NULL AND settings <> ''").
+		Pluck("settings", &rows).Error
+	if err != nil {
+		common.SysLog("failed to load channel auto test overrides: " + err.Error())
+		return autoTestMinutesValue
+	}
+
+	minimum := 0.0
+	for _, raw := range rows {
+		settings := dto.ChannelOtherSettings{}
+		if err := common.UnmarshalJsonStr(raw, &settings); err != nil {
+			continue
+		}
+		override := settings.AutoTestMinutesOverride
+		if override <= 0 {
+			continue
+		}
+		if minimum == 0 || override < minimum {
+			minimum = override
+		}
+	}
+
+	autoTestMinutesValue = minimum
+	autoTestMinutesCachedAt = time.Now()
+	return minimum
+}
+
+// InvalidateChannelAutoTestMinutesCache drops the cached minimum so the next
+// caller sees a just-saved override instead of waiting out the TTL.
+func InvalidateChannelAutoTestMinutesCache() {
+	autoTestMinutesMu.Lock()
+	defer autoTestMinutesMu.Unlock()
+	autoTestMinutesCachedAt = time.Time{}
 }
 
 // ChannelProxyRefs counts how many channels reference each proxy registry id.

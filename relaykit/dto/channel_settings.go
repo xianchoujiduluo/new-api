@@ -101,6 +101,11 @@ type ChannelOtherSettings struct {
 	// rejection. Empty follows the default allow policy. Accepted values:
 	// "", "allow", "safe", "strict".
 	ToolLossPolicy string `json:"tool_loss_policy,omitempty"`
+	// AutoTestMinutesOverride overrides the global scheduled channel test
+	// interval for this channel. Zero or unset follows the global interval; any
+	// positive value wins, so a channel can be checked either more or less often
+	// than the rest.
+	AutoTestMinutesOverride float64 `json:"auto_test_minutes_override,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {

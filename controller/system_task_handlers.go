@@ -40,6 +40,12 @@ func (channelTestHandler) Interval() time.Duration {
 	if minutes <= 0 {
 		minutes = 10
 	}
+	// A channel whose own interval is shorter than the global one must not wait
+	// for the global cadence, so the tick is the smallest interval in play.
+	// Channels whose own interval has not elapsed are filtered inside the run.
+	if minimum := model.MinChannelAutoTestMinutes(); minimum > 0 && minimum < minutes {
+		minutes = minimum
+	}
 	return time.Duration(minutes * float64(time.Minute))
 }
 

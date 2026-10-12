@@ -261,6 +261,8 @@ export const channelFormSchema = z
       .string()
       .optional()
       .refine(isOptionalProxyURL, ERROR_MESSAGES.INVALID_PROXY),
+    // 引用共享代理注册表；与 proxy 互斥，空值表示使用 proxy 或直连。
+    proxy_ref: z.string().optional(),
     http_protocol: z.enum(['auto', 'http1']).optional(),
     http2_connection_shards: z.number().int().optional(),
     pass_through_body_enabled: z.boolean().optional(),
@@ -274,6 +276,8 @@ export const channelFormSchema = z
     // Field passthrough controls (stored in settings JSON)
     allow_service_tier: z.boolean().optional(), // OpenAI/Anthropic
     disable_store: z.boolean().optional(), // OpenAI only
+    // 渠道级测活周期覆盖（分钟）；0 或留空表示跟随全局。
+    auto_test_minutes_override: z.number().min(0).optional(),
     convert_responses_to_chat: z.boolean().optional(), // OpenAI only
     allow_safety_identifier: z.boolean().optional(), // OpenAI only
     allow_include_obfuscation: z.boolean().optional(), // OpenAI: include usage obfuscation
@@ -443,6 +447,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   force_format: false,
   thinking_to_content: false,
   proxy: '',
+  proxy_ref: '',
   http_protocol: HTTP_PROTOCOL_AUTO,
   http2_connection_shards: 1,
   pass_through_body_enabled: false,
@@ -456,6 +461,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   // Field passthrough controls
   allow_service_tier: false,
   disable_store: false,
+  auto_test_minutes_override: 0,
   convert_responses_to_chat: false,
   allow_safety_identifier: false,
   allow_include_obfuscation: false,
@@ -485,6 +491,7 @@ export function transformChannelToFormDefaults(
     force_format: false,
     thinking_to_content: false,
     proxy: '',
+    proxy_ref: '',
     http_protocol: HTTP_PROTOCOL_AUTO as 'auto' | 'http1',
     http2_connection_shards: 1,
     pass_through_body_enabled: false,
@@ -504,6 +511,7 @@ export function transformChannelToFormDefaults(
         force_format: parsed.force_format || false,
         thinking_to_content: parsed.thinking_to_content || false,
         proxy: parsed.proxy || '',
+        proxy_ref: parsed.proxy_ref || '',
         http_protocol: protocol,
         http2_connection_shards: protocol === HTTP_PROTOCOL_HTTP1 ? 1 : shards,
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
@@ -523,6 +531,7 @@ export function transformChannelToFormDefaults(
   let awsKeyType: 'ak_sk' | 'api_key' = 'ak_sk'
   let allowServiceTier = false
   let disableStore = false
+  let autoTestMinutesOverride = 0
   let convertResponsesToChat = false
   let allowSafetyIdentifier = false
   let allowIncludeObfuscation = false
@@ -544,6 +553,7 @@ export function transformChannelToFormDefaults(
       awsKeyType = parsed.aws_key_type || 'ak_sk'
       allowServiceTier = parsed.allow_service_tier === true
       disableStore = parsed.disable_store === true
+      autoTestMinutesOverride = Number(parsed.auto_test_minutes_override) || 0
       convertResponsesToChat = parsed.convert_responses_to_chat === true
       allowSafetyIdentifier = parsed.allow_safety_identifier === true
       allowIncludeObfuscation = parsed.allow_include_obfuscation === true
@@ -604,6 +614,7 @@ export function transformChannelToFormDefaults(
     aws_key_type: awsKeyType,
     allow_service_tier: allowServiceTier,
     disable_store: disableStore,
+    auto_test_minutes_override: autoTestMinutesOverride,
     convert_responses_to_chat: convertResponsesToChat,
     allow_include_obfuscation: allowIncludeObfuscation,
     allow_inference_geo: allowInferenceGeo,
@@ -630,6 +641,7 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
     force_format: formData.force_format || false,
     thinking_to_content: formData.thinking_to_content || false,
     proxy: formData.proxy?.trim() || '',
+    proxy_ref: formData.proxy_ref?.trim() || '',
     pass_through_body_enabled: formData.pass_through_body_enabled || false,
     system_prompt: formData.system_prompt || '',
     system_prompt_override: formData.system_prompt_override || false,
@@ -686,6 +698,13 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     settingsObj.openrouter_enterprise = formData.is_enterprise_account === true
   } else if ('openrouter_enterprise' in settingsObj) {
     delete settingsObj.openrouter_enterprise
+  }
+
+  // 渠道级测活周期对所有渠道类型都适用，因此不放进下面的类型分支。
+  if (formData.auto_test_minutes_override) {
+    settingsObj.auto_test_minutes_override = formData.auto_test_minutes_override
+  } else if ('auto_test_minutes_override' in settingsObj) {
+    delete settingsObj.auto_test_minutes_override
   }
 
   // Add aws_key_type for AWS channels (type 33)

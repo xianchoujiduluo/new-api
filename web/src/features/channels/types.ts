@@ -84,6 +84,7 @@ export interface ChannelSettings {
   force_format?: boolean
   thinking_to_content?: boolean
   proxy?: string
+  proxy_ref?: string
   pass_through_body_enabled?: boolean
   system_prompt?: string
   system_prompt_override?: boolean
@@ -98,6 +99,7 @@ export interface ChannelOtherSettings {
   aws_key_type?: 'ak_sk' | 'api_key'
   allow_service_tier?: boolean
   disable_store?: boolean
+  auto_test_minutes_override?: number
   convert_responses_to_chat?: boolean
   allow_safety_identifier?: boolean
   allow_include_obfuscation?: boolean
