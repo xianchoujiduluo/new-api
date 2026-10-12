@@ -24,7 +24,6 @@ import type {
   SortingState,
   Row,
 } from '@tanstack/react-table'
-import { Eye, EyeOff } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -41,23 +40,12 @@ import {
   useDebouncedColumnFilter,
   useDataTable,
 } from '@/components/data-table'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { getChannels, searchChannels, getGroups } from '../api'
-import {
-  DEFAULT_PAGE_SIZE,
-  CHANNEL_STATUS,
-  CHANNEL_STATUS_OPTIONS,
-} from '../constants'
+import { DEFAULT_PAGE_SIZE, CHANNEL_STATUS } from '../constants'
 import {
   channelsQueryKeys,
   aggregateChannelsByTag,
@@ -71,6 +59,7 @@ import { ChannelCard } from './channel-card'
 import { ChannelTypeLogo } from './channel-type-badge'
 import { useChannelsColumns } from './channels-columns'
 import { useChannels } from './channels-provider'
+import { useChannelsToolbar } from './channels-toolbar'
 import { DataTableBulkActions } from './data-table-bulk-actions'
 
 const route = getRouteApi('/_authenticated/channels/')
@@ -96,13 +85,7 @@ function isDisabledChannelRow(channel: Channel) {
 
 export function ChannelsTable() {
   const { t } = useTranslation()
-  const {
-    enableTagMode,
-    idSort,
-    batchMode,
-    sensitiveVisible,
-    setSensitiveVisible,
-  } = useChannels()
+  const { enableTagMode, idSort, batchMode, sensitiveVisible } = useChannels()
   const isMobile = useMediaQuery('(max-width: 640px)')
   const queryClient = useQueryClient()
 
@@ -450,6 +433,19 @@ export function ChannelsTable() {
     })),
   ]
 
+  const toolbarProps = useChannelsToolbar({
+    table,
+    modelInputProps: {
+      value: modelFilterInput,
+      onChange: onModelFilterInputChange,
+      onCompositionStart: onModelFilterCompositionStart,
+      onCompositionEnd: onModelFilterCompositionEnd,
+    },
+    onReset: resetModelFilterInput,
+    typeFilterOptions,
+    groupFilterOptions,
+  })
+
   return (
     <DataTablePage
       table={table}
@@ -468,63 +464,7 @@ export function ChannelsTable() {
       )}
       cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'
       applyHeaderSize
-      toolbarProps={{
-        searchPlaceholder: t('Filter by name, ID, or key...'),
-        searchDebounceMs: 500,
-        onReset: () => {
-          resetModelFilterInput()
-        },
-        additionalSearch: (
-          <Input
-            placeholder={t('Filter by model...')}
-            value={modelFilterInput}
-            onChange={onModelFilterInputChange}
-            onCompositionStart={onModelFilterCompositionStart}
-            onCompositionEnd={onModelFilterCompositionEnd}
-            className='w-full sm:w-[150px] lg:w-[180px]'
-          />
-        ),
-        filters: [
-          {
-            columnId: 'status',
-            title: t('Status'),
-            options: [...CHANNEL_STATUS_OPTIONS],
-            singleSelect: true,
-          },
-          {
-            columnId: 'type',
-            title: t('Type'),
-            options: typeFilterOptions,
-            singleSelect: true,
-          },
-          {
-            columnId: 'group',
-            title: t('Group'),
-            options: groupFilterOptions,
-            singleSelect: true,
-          },
-        ],
-        preActions: (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant='ghost'
-                  size='icon'
-                  onClick={() => setSensitiveVisible(!sensitiveVisible)}
-                  aria-label={sensitiveVisible ? t('Hide') : t('Show')}
-                  className='text-muted-foreground hover:text-foreground size-8'
-                />
-              }
-            >
-              {sensitiveVisible ? <Eye /> : <EyeOff />}
-            </TooltipTrigger>
-            <TooltipContent>
-              {sensitiveVisible ? t('Hide') : t('Show')}
-            </TooltipContent>
-          </Tooltip>
-        ),
-      }}
+      toolbarProps={toolbarProps}
       getRowClassName={(row, { isMobile }) => {
         if (!isDisabledChannelRow(row.original)) {
           return undefined
