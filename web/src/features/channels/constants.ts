@@ -143,11 +143,7 @@ export const CHANNEL_STATUS_LABELS = {
 export const CHANNEL_STATUS_OPTIONS = [
   { value: 'all', label: 'All Status' },
   { value: 'enabled', label: 'Enabled' },
-  // 粗粒度：所有非启用状态（手动 + 自动禁用）
   { value: 'disabled', label: 'Disabled' },
-  // 细粒度：后端把手动禁用与自动禁用分开存储，需要能分别筛选
-  { value: 'manually_disabled', label: 'Manually Disabled' },
-  { value: 'auto_disabled', label: 'Auto Disabled' },
 ] as const
 
 export const CHANNEL_STATUS_CONFIG = {
