@@ -1022,6 +1022,13 @@ export function useChannelsColumns(
             return true
           }
           const status = row.getValue(id) as number
+          // 细粒度选项先判，允许与粗粒度同时选中
+          if (value.includes('auto_disabled') && status === 3) {
+            return true
+          }
+          if (value.includes('manually_disabled') && status === 2) {
+            return true
+          }
           if (value.includes('enabled')) {
             return status === 1
           }

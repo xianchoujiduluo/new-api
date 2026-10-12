@@ -161,7 +161,9 @@ export function ChannelsTable() {
           const stored = localStorage.getItem(
             CHANNELS_STATUS_FILTER_STORAGE_KEY
           )
-          return stored === 'enabled' || stored === 'disabled' ? [stored] : []
+          // 原实现只认 enabled/disabled，新增状态筛选刷新后会丢。
+          // 这里接受任意已保存值，由 filterFn 负责未知值的匹配。
+          return stored ? [stored] : []
         },
       },
       { columnId: 'type', searchKey: 'type', type: 'array' },
