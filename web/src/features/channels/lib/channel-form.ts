@@ -278,6 +278,8 @@ export const channelFormSchema = z
     disable_store: z.boolean().optional(), // OpenAI only
     // 渠道级测活周期覆盖（分钟）；0 或留空表示跟随全局。
     auto_test_minutes_override: z.number().min(0).optional(),
+    // 三态：inherit 跟随全局，on/off 覆盖全局且优先。
+    auto_test_enabled: z.enum(['inherit', 'on', 'off']).optional(),
     convert_responses_to_chat: z.boolean().optional(), // OpenAI only
     allow_safety_identifier: z.boolean().optional(), // OpenAI only
     allow_include_obfuscation: z.boolean().optional(), // OpenAI: include usage obfuscation
@@ -462,6 +464,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   allow_service_tier: false,
   disable_store: false,
   auto_test_minutes_override: 0,
+  auto_test_enabled: 'inherit' as const,
   convert_responses_to_chat: false,
   allow_safety_identifier: false,
   allow_include_obfuscation: false,
@@ -532,6 +535,7 @@ export function transformChannelToFormDefaults(
   let allowServiceTier = false
   let disableStore = false
   let autoTestMinutesOverride = 0
+  let autoTestEnabled: 'inherit' | 'on' | 'off' = 'inherit'
   let convertResponsesToChat = false
   let allowSafetyIdentifier = false
   let allowIncludeObfuscation = false
@@ -554,6 +558,13 @@ export function transformChannelToFormDefaults(
       allowServiceTier = parsed.allow_service_tier === true
       disableStore = parsed.disable_store === true
       autoTestMinutesOverride = Number(parsed.auto_test_minutes_override) || 0
+      if (parsed.auto_test_enabled === true) {
+        autoTestEnabled = 'on'
+      } else if (parsed.auto_test_enabled === false) {
+        autoTestEnabled = 'off'
+      } else {
+        autoTestEnabled = 'inherit'
+      }
       convertResponsesToChat = parsed.convert_responses_to_chat === true
       allowSafetyIdentifier = parsed.allow_safety_identifier === true
       allowIncludeObfuscation = parsed.allow_include_obfuscation === true
@@ -615,6 +626,7 @@ export function transformChannelToFormDefaults(
     allow_service_tier: allowServiceTier,
     disable_store: disableStore,
     auto_test_minutes_override: autoTestMinutesOverride,
+    auto_test_enabled: autoTestEnabled,
     convert_responses_to_chat: convertResponsesToChat,
     allow_include_obfuscation: allowIncludeObfuscation,
     allow_inference_geo: allowInferenceGeo,
@@ -700,7 +712,16 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     delete settingsObj.openrouter_enterprise
   }
 
-  // 渠道级测活周期对所有渠道类型都适用，因此不放进下面的类型分支。
+  // 渠道级测活设置对所有渠道类型都适用，因此不放进下面的类型分支。
+  if (formData.auto_test_enabled === 'on') {
+    settingsObj.auto_test_enabled = true
+  } else if (formData.auto_test_enabled === 'off') {
+    settingsObj.auto_test_enabled = false
+  } else if ('auto_test_enabled' in settingsObj) {
+    // 未设置时省略，语义为"跟随全局"。
+    delete settingsObj.auto_test_enabled
+  }
+
   if (formData.auto_test_minutes_override) {
     settingsObj.auto_test_minutes_override = formData.auto_test_minutes_override
   } else if ('auto_test_minutes_override' in settingsObj) {

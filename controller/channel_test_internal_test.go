@@ -302,7 +302,19 @@ func TestResolveChannelTestUserIDUsesRequestUser(t *testing.T) {
 	require.Equal(t, 2, userID)
 }
 
+// withGlobalAutoTestEnabled pins the global scheduled-test switch for one test,
+// so selection tests exercise the "unset channels follow the global switch" path
+// rather than accidentally relying on the ambient default.
+func withGlobalAutoTestEnabled(t *testing.T, enabled bool) {
+	t.Helper()
+	monitor := operation_setting.GetMonitorSetting()
+	previous := monitor.AutoTestChannelEnabled
+	monitor.AutoTestChannelEnabled = enabled
+	t.Cleanup(func() { monitor.AutoTestChannelEnabled = previous })
+}
+
 func TestSelectChannelsForAutomaticTestPassiveRecoveryOnlyUsesAutoDisabled(t *testing.T) {
+	withGlobalAutoTestEnabled(t, true)
 	channels := []*model.Channel{
 		{Id: 1, Status: common.ChannelStatusEnabled},
 		{Id: 2, Status: common.ChannelStatusAutoDisabled},
@@ -316,6 +328,7 @@ func TestSelectChannelsForAutomaticTestPassiveRecoveryOnlyUsesAutoDisabled(t *te
 }
 
 func TestSelectChannelsForAutomaticTestScheduledSkipsManualDisabled(t *testing.T) {
+	withGlobalAutoTestEnabled(t, true)
 	channels := []*model.Channel{
 		{Id: 1, Status: common.ChannelStatusEnabled},
 		{Id: 2, Status: common.ChannelStatusAutoDisabled},
@@ -330,6 +343,7 @@ func TestSelectChannelsForAutomaticTestScheduledSkipsManualDisabled(t *testing.T
 }
 
 func TestSelectChannelsForAutomaticTestAutoBanOnlyUsesEligibleChannels(t *testing.T) {
+	withGlobalAutoTestEnabled(t, true)
 	autoBanEnabled := 1
 	autoBanDisabled := 0
 	channels := []*model.Channel{
@@ -475,6 +489,7 @@ func TestTestAllChannelsRejectsExistingActiveTask(t *testing.T) {
 // interval has elapsed, while a channel without an override keeps following the
 // global interval. Channels never tested are always due.
 func TestSelectChannelsForAutomaticTestHonorsPerChannelInterval(t *testing.T) {
+	withGlobalAutoTestEnabled(t, true)
 	monitorSetting := operation_setting.GetMonitorSetting()
 	previousMinutes := monitorSetting.AutoTestChannelMinutes
 	monitorSetting.AutoTestChannelMinutes = 10
@@ -511,6 +526,8 @@ func TestSelectChannelsForAutomaticTestHonorsPerChannelInterval(t *testing.T) {
 // tick shrinks to the shortest channel interval, otherwise a channel asking for a
 // faster check could never be selected on time.
 func TestChannelTestHandlerIntervalFollowsShortestOverride(t *testing.T) {
+	// 该用例覆盖"全局开启时 tick 收敛到最短覆盖值"的场景。
+	withGlobalAutoTestEnabled(t, true)
 	monitorSetting := operation_setting.GetMonitorSetting()
 	previousMinutes := monitorSetting.AutoTestChannelMinutes
 	monitorSetting.AutoTestChannelMinutes = 10
@@ -525,11 +542,11 @@ func TestChannelTestHandlerIntervalFollowsShortestOverride(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&model.Channel{}))
 	model.DB = db
 	common.SetMainDatabaseType(common.DatabaseTypeSQLite)
-	model.InvalidateChannelAutoTestMinutesCache()
+	model.InvalidateChannelAutoTestCache()
 	t.Cleanup(func() {
 		model.DB = previousDB
 		common.SetMainDatabaseType(previousType)
-		model.InvalidateChannelAutoTestMinutesCache()
+		model.InvalidateChannelAutoTestCache()
 	})
 
 	var handler channelTestHandler
@@ -537,6 +554,39 @@ func TestChannelTestHandlerIntervalFollowsShortestOverride(t *testing.T) {
 
 	override := `{"auto_test_minutes_override":2}`
 	require.NoError(t, db.Create(&model.Channel{Name: "c", Key: "k", OtherSettings: override}).Error)
-	model.InvalidateChannelAutoTestMinutesCache()
+	model.InvalidateChannelAutoTestCache()
 	assert.Equal(t, 2*time.Minute, handler.Interval(), "the tick must shrink to the shortest override")
+}
+
+// TestSelectChannelsForAutomaticTestChannelSettingWinsOverGlobal pins the
+// precedence rule in both directions: a channel that explicitly enables testing
+// runs even when the global switch is off, and a channel that explicitly
+// disables it is skipped even when the global switch is on.
+func TestSelectChannelsForAutomaticTestChannelSettingWinsOverGlobal(t *testing.T) {
+	on := true
+	off := false
+	explicit := func(value bool) string {
+		return fmt.Sprintf(`{"auto_test_enabled":%t}`, value)
+	}
+	channels := []*model.Channel{
+		{Id: 1, Status: common.ChannelStatusEnabled},
+		{Id: 2, Status: common.ChannelStatusEnabled, OtherSettings: explicit(on)},
+		{Id: 3, Status: common.ChannelStatusEnabled, OtherSettings: explicit(off)},
+	}
+	selectedIDs := func() []int {
+		selected := selectChannelsForAutomaticTest(channels, operation_setting.ChannelTestModeScheduledAll)
+		ids := make([]int, 0, len(selected))
+		for _, channel := range selected {
+			ids = append(ids, channel.Id)
+		}
+		return ids
+	}
+
+	// 全局关闭：只有显式开启的渠道参与。
+	withGlobalAutoTestEnabled(t, false)
+	assert.Equal(t, []int{2}, selectedIDs())
+
+	// 全局开启：未设置的跟随，显式关闭的仍然被跳过。
+	withGlobalAutoTestEnabled(t, true)
+	assert.Equal(t, []int{1, 2}, selectedIDs())
 }

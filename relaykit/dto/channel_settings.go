@@ -101,6 +101,11 @@ type ChannelOtherSettings struct {
 	// rejection. Empty follows the default allow policy. Accepted values:
 	// "", "allow", "safe", "strict".
 	ToolLossPolicy string `json:"tool_loss_policy,omitempty"`
+	// AutoTestEnabled turns scheduled testing on or off for this channel and wins
+	// over the global switch in both directions: nil follows the global setting,
+	// true tests the channel even when the global switch is off, false skips it
+	// even when the global switch is on.
+	AutoTestEnabled *bool `json:"auto_test_enabled,omitempty"`
 	// AutoTestMinutesOverride overrides the global scheduled channel test
 	// interval for this channel. Zero or unset follows the global interval; any
 	// positive value wins, so a channel can be checked either more or less often

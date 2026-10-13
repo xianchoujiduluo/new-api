@@ -101,6 +101,10 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from '@/components/ui/toggle-group'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
@@ -4345,6 +4349,45 @@ export function ChannelMutateDrawer({
                                   <FormDescription>
                                     {t(
                                       'Pick a shared proxy from the registry, or type a URL for this channel only.'
+                                    )}
+                                  </FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
+                              name='auto_test_enabled'
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>
+                                    {t('Scheduled test')}
+                                  </FormLabel>
+                                  <FormControl>
+                                    <ToggleGroup
+                                      value={[field.value ?? 'inherit']}
+                                      onValueChange={(values) =>
+                                        field.onChange(values[0] ?? 'inherit')
+                                      }
+                                      multiple={false}
+                                      variant='outline'
+                                      spacing={1}
+                                    >
+                                      <ToggleGroupItem value='inherit'>
+                                        {t('Follow global')}
+                                      </ToggleGroupItem>
+                                      <ToggleGroupItem value='on'>
+                                        {t('Enabled')}
+                                      </ToggleGroupItem>
+                                      <ToggleGroupItem value='off'>
+                                        {t('Disabled')}
+                                      </ToggleGroupItem>
+                                    </ToggleGroup>
+                                  </FormControl>
+                                  <FormDescription>
+                                    {t(
+                                      'Overrides the global scheduled test switch for this channel, and takes precedence over it.'
                                     )}
                                   </FormDescription>
                                   <FormMessage />

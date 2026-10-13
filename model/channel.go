@@ -1012,28 +1012,45 @@ func (channel *Channel) ValidateSettings() error {
 	return nil
 }
 
-// autoTestMinutesCache holds the smallest per-channel auto test override.
+// ChannelAutoTestOverrides summarizes the per-channel scheduled-test overrides.
+//
+// It intentionally does not read the global monitor setting: the model layer
+// reports what channels asked for, and the controller combines that with the
+// global switch. A channel-level setting wins over the global one in both
+// directions, so "explicitly enabled" and "explicitly disabled" are kept apart
+// from "unset".
+type ChannelAutoTestOverrides struct {
+	// AnyExplicitlyEnabled reports that at least one channel turned scheduled
+	// testing on, which keeps the scheduler alive even when the global switch is
+	// off.
+	AnyExplicitlyEnabled bool
+	// MinActiveMinutes is the smallest interval among channels that are not
+	// explicitly disabled, used when the global switch is on.
+	MinActiveMinutes float64
+	// MinExplicitMinutes is the smallest interval among explicitly enabled
+	// channels, used when the global switch is off.
+	MinExplicitMinutes float64
+}
+
+// autoTestOverridesCache memoizes the scan below.
 //
 // The scheduler asks for the effective interval on every tick (about every 15
-// seconds), and answering it requires reading every channel's settings JSON, so
+// seconds), and answering it requires parsing every channel's settings JSON, so
 // the result is cached briefly. A stale value only shifts a run by one tick.
 var (
-	autoTestMinutesMu       sync.Mutex
-	autoTestMinutesValue    float64
-	autoTestMinutesCachedAt time.Time
+	autoTestOverridesMu       sync.Mutex
+	autoTestOverridesValue    ChannelAutoTestOverrides
+	autoTestOverridesCachedAt time.Time
 )
 
-const autoTestMinutesCacheTTL = 30 * time.Second
+const autoTestOverridesCacheTTL = 30 * time.Second
 
-// MinChannelAutoTestMinutes returns the smallest non-zero per-channel auto test
-// interval, or 0 when no channel overrides the global interval. Callers combine
-// it with the global interval to get the tick at which every channel's own
-// schedule can be honored.
-func MinChannelAutoTestMinutes() float64 {
-	autoTestMinutesMu.Lock()
-	defer autoTestMinutesMu.Unlock()
-	if !autoTestMinutesCachedAt.IsZero() && time.Since(autoTestMinutesCachedAt) < autoTestMinutesCacheTTL {
-		return autoTestMinutesValue
+// ChannelAutoTestOverridesSnapshot returns the cached per-channel overrides.
+func ChannelAutoTestOverridesSnapshot() ChannelAutoTestOverrides {
+	autoTestOverridesMu.Lock()
+	defer autoTestOverridesMu.Unlock()
+	if !autoTestOverridesCachedAt.IsZero() && time.Since(autoTestOverridesCachedAt) < autoTestOverridesCacheTTL {
+		return autoTestOverridesValue
 	}
 
 	var rows []string
@@ -1042,35 +1059,46 @@ func MinChannelAutoTestMinutes() float64 {
 		Pluck("settings", &rows).Error
 	if err != nil {
 		common.SysLog("failed to load channel auto test overrides: " + err.Error())
-		return autoTestMinutesValue
+		return autoTestOverridesValue
 	}
 
-	minimum := 0.0
+	overrides := ChannelAutoTestOverrides{}
 	for _, raw := range rows {
 		settings := dto.ChannelOtherSettings{}
 		if err := common.UnmarshalJsonStr(raw, &settings); err != nil {
 			continue
 		}
-		override := settings.AutoTestMinutesOverride
-		if override <= 0 {
-			continue
+		// nil 表示未设置：跟随全局开关，因此参与"全局开启"时的最小周期统计。
+		if settings.AutoTestEnabled == nil || *settings.AutoTestEnabled {
+			overrides.MinActiveMinutes = smallerPositive(overrides.MinActiveMinutes, settings.AutoTestMinutesOverride)
 		}
-		if minimum == 0 || override < minimum {
-			minimum = override
+		if settings.AutoTestEnabled != nil && *settings.AutoTestEnabled {
+			overrides.AnyExplicitlyEnabled = true
+			overrides.MinExplicitMinutes = smallerPositive(overrides.MinExplicitMinutes, settings.AutoTestMinutesOverride)
 		}
 	}
 
-	autoTestMinutesValue = minimum
-	autoTestMinutesCachedAt = time.Now()
-	return minimum
+	autoTestOverridesValue = overrides
+	autoTestOverridesCachedAt = time.Now()
+	return overrides
 }
 
-// InvalidateChannelAutoTestMinutesCache drops the cached minimum so the next
-// caller sees a just-saved override instead of waiting out the TTL.
-func InvalidateChannelAutoTestMinutesCache() {
-	autoTestMinutesMu.Lock()
-	defer autoTestMinutesMu.Unlock()
-	autoTestMinutesCachedAt = time.Time{}
+func smallerPositive(current, candidate float64) float64 {
+	if candidate <= 0 {
+		return current
+	}
+	if current == 0 || candidate < current {
+		return candidate
+	}
+	return current
+}
+
+// InvalidateChannelAutoTestCache drops the cached overrides so the next caller
+// sees a just-saved channel instead of waiting out the TTL.
+func InvalidateChannelAutoTestCache() {
+	autoTestOverridesMu.Lock()
+	defer autoTestOverridesMu.Unlock()
+	autoTestOverridesCachedAt = time.Time{}
 }
 
 // ChannelProxyRefs counts how many channels reference each proxy registry id.

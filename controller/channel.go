@@ -1119,7 +1119,7 @@ func UpdateChannel(c *gin.Context) {
 	model.InitChannelCache()
 	// A changed auto test override must take effect on the next scheduler tick
 	// rather than waiting out the short cache TTL.
-	model.InvalidateChannelAutoTestMinutesCache()
+	model.InvalidateChannelAutoTestCache()
 	if proxyChanged {
 		service.InvalidateProxyClient(originProxy)
 	}

@@ -1112,7 +1112,9 @@ func runChannelTestTask(ctx context.Context, mode string, notify bool, report fu
 }
 
 func selectChannelsForAutomaticTest(channels []*model.Channel, mode string) []*model.Channel {
-	globalMinutes := operation_setting.GetMonitorSetting().AutoTestChannelMinutes
+	monitor := operation_setting.GetMonitorSetting()
+	globalEnabled := monitor.AutoTestChannelEnabled
+	globalMinutes := monitor.AutoTestChannelMinutes
 	if globalMinutes <= 0 {
 		globalMinutes = 10
 	}
@@ -1129,14 +1131,21 @@ func selectChannelsForAutomaticTest(channels []*model.Channel, mode string) []*m
 		if mode == operation_setting.ChannelTestModePassiveRecovery && channel.Status != common.ChannelStatusAutoDisabled {
 			continue
 		}
-		// Each channel is due on its own cadence. A zero override follows the
-		// global interval, so channels that never set one keep being tested at
-		// the configured rate. TestTime is written by the test itself, so a
-		// channel that has never been tested (or was just created) runs at once.
+		// 渠道级设置优先于全局：显式开启即使全局关闭也参与，显式关闭即使
+		// 全局开启也跳过；未设置则跟随全局。周期同理，未设置用全局周期。
+		settings := channel.GetOtherSettings()
 		intervalMinutes := globalMinutes
-		if override := channel.GetOtherSettings().AutoTestMinutesOverride; override > 0 {
-			intervalMinutes = override
+		if settings.AutoTestMinutesOverride > 0 {
+			intervalMinutes = settings.AutoTestMinutesOverride
 		}
+		if settings.AutoTestEnabled != nil {
+			if !*settings.AutoTestEnabled {
+				continue
+			}
+		} else if !globalEnabled {
+			continue
+		}
+		// TestTime 由测活自身写入，因此从未测过的渠道（或新建渠道）立即参与。
 		if channel.TestTime > 0 && float64(now-channel.TestTime) < intervalMinutes*60 {
 			continue
 		}

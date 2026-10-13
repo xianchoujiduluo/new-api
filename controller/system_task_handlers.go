@@ -32,7 +32,11 @@ type channelTestHandler struct{}
 func (channelTestHandler) Type() string { return model.SystemTaskTypeChannelTest }
 
 func (channelTestHandler) Enabled() bool {
-	return operation_setting.GetMonitorSetting().AutoTestChannelEnabled
+	if operation_setting.GetMonitorSetting().AutoTestChannelEnabled {
+		return true
+	}
+	// 渠道级显式开启优先于全局：即使全局关闭，只要有一个渠道开了就要跑。
+	return model.ChannelAutoTestOverridesSnapshot().AnyExplicitlyEnabled
 }
 
 func (channelTestHandler) Interval() time.Duration {
@@ -43,8 +47,14 @@ func (channelTestHandler) Interval() time.Duration {
 	// A channel whose own interval is shorter than the global one must not wait
 	// for the global cadence, so the tick is the smallest interval in play.
 	// Channels whose own interval has not elapsed are filtered inside the run.
-	if minimum := model.MinChannelAutoTestMinutes(); minimum > 0 && minimum < minutes {
-		minutes = minimum
+	// 全局开启时按"未被显式关闭"的渠道取最小周期；全局关闭时只统计显式开启的渠道。
+	overrides := model.ChannelAutoTestOverridesSnapshot()
+	candidate := overrides.MinActiveMinutes
+	if !operation_setting.GetMonitorSetting().AutoTestChannelEnabled {
+		candidate = overrides.MinExplicitMinutes
+	}
+	if candidate > 0 && candidate < minutes {
+		minutes = candidate
 	}
 	return time.Duration(minutes * float64(time.Minute))
 }
