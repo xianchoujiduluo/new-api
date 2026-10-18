@@ -45,6 +45,11 @@ jobs:
         run: |
           cd dist
           shopt -s dotglob nullglob
+          # Embed the build identity so a running instance can report the
+          # version it is serving and compare it with the published manifest.
+          version="$(cat ../../VERSION 2>/dev/null || echo unknown)"
+          printf '{"version":"%s","commit":"%s","built_at":%s}\n' \
+            "$version" "${GITHUB_SHA}" "$(date +%s)" > version.json
           files=(*)
           if (( ${#files[@]} == 0 )); then
             echo 'Frontend build output is empty'
@@ -52,13 +57,23 @@ jobs:
           fi
           tar -czf ../../frontend-latest.tar.gz -- "${files[@]}"
 
+      - name: Write frontend manifest
+        run: |
+          version="$(cat ../VERSION 2>/dev/null || echo unknown)"
+          printf '{"schema_version":1,"version":"%s","commit":"%s","published_at":"%s"}\n' \
+            "$version" "${GITHUB_SHA}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > frontend-manifest.json
+          cat frontend-manifest.json
+
       - name: Publish latest frontend release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           tag_name: latestFront
           name: Latest frontend
           target_commitish: ${{ github.sha }}
-          files: frontend-latest.tar.gz
+          files: |
+            frontend-latest.tar.gz
+            web/frontend-manifest.json
           overwrite_files: true
           make_latest: false
         env:

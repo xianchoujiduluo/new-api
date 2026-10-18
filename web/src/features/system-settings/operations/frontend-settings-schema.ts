@@ -75,5 +75,11 @@ export function createFrontendSchema(t: (key: string) => string) {
           'Proxy address must use HTTP, HTTPS, SOCKS5, or SOCKS5H and include a valid host'
         )
       ),
+    manifestUrl: z
+      .string()
+      .refine(
+        isOptionalDownloadURL,
+        t('Provide a valid URL starting with http:// or https://')
+      ),
   })
 }

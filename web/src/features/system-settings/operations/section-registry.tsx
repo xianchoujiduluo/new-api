@@ -155,6 +155,7 @@ const OPERATIONS_SECTIONS = [
       <FrontendSettingsSection
         defaultDownloadUrl={settings['frontend_setting.download_url'] ?? ''}
         defaultDownloadProxy={settings['frontend_setting.download_proxy'] ?? ''}
+        defaultManifestUrl={settings['frontend_setting.manifest_url'] ?? ''}
       />
     ),
   },

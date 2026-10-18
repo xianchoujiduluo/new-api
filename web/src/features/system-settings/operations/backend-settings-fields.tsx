@@ -1,5 +1,6 @@
 import type { Control } from 'react-hook-form'
 
+import { Combobox } from '@/components/ui/combobox'
 import {
   FormControl,
   FormDescription,
@@ -9,6 +10,8 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+
+import { useProxyEntries } from '../hooks/use-proxy-entries'
 
 export type BackendFormValues = {
   manifestUrl: string
@@ -50,6 +53,7 @@ export function BackendManifestUrlField(props: BackendFieldProps) {
 }
 
 export function BackendDownloadProxyField(props: BackendFieldProps) {
+  const proxyEntries = useProxyEntries()
   return (
     <FormField
       control={props.control}
@@ -58,12 +62,16 @@ export function BackendDownloadProxyField(props: BackendFieldProps) {
         <FormItem className='lg:col-span-2'>
           <FormLabel>{props.t('Proxy Address')}</FormLabel>
           <FormControl>
-            <Input
-              type='text'
-              inputMode='url'
+            <Combobox
+              allowCustomValue
+              options={proxyEntries.map((entry) => ({
+                value: entry.url,
+                label: `${entry.name} — ${entry.url}`,
+              }))}
+              value={field.value || ''}
+              onValueChange={(value) => field.onChange(value ?? '')}
               placeholder='http://127.0.0.1:7890'
-              autoComplete='off'
-              {...field}
+              searchPlaceholder={props.t('Search...')}
             />
           </FormControl>
           <FormDescription>

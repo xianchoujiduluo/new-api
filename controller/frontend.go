@@ -63,3 +63,34 @@ func DiscardFrontendUpdate(c *gin.Context) {
 		"data":    gin.H{"discarded": removed},
 	})
 }
+
+// GetFrontendUpdateStatus reports the live, staged and previous frontend
+// builds so the operator can see versions before acting.
+func GetFrontendUpdateStatus(c *gin.Context) {
+	status, err := service.FrontendUpdateStatusSnapshot(service.FrontendAssetsDir())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": status})
+}
+
+// CheckFrontendUpdate compares the live build with the published manifest.
+func CheckFrontendUpdate(c *gin.Context) {
+	result, err := service.CheckConfiguredFrontend(c.Request.Context())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": result})
+}
+
+// StageFrontendRollback moves the retired build back into staging; a separate
+// activation is required, mirroring the backend rollback flow.
+func StageFrontendRollback(c *gin.Context) {
+	if err := service.StageFrontendRollback(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": nil})
+}

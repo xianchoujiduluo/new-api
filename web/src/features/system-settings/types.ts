@@ -94,6 +94,24 @@ export type UpdateDownloadProgress = {
 
 export type BackendDownloadJob = UpdateDownloadProgress
 
+export type FrontendUpdateStatus = {
+  supported: boolean
+  current_version: string
+  current_commit: string
+  pending_version?: string
+  previous_version?: string
+  staged: boolean
+  can_rollback: boolean
+}
+
+export type FrontendCheckResult = {
+  current_version: string
+  latest_version: string
+  latest_commit: string
+  published_at?: string
+  update_available: boolean
+}
+
 export type FrontendDownloadJob = UpdateDownloadProgress
 
 export type FrontendStagedRelease = {
@@ -458,6 +476,7 @@ export type OperationsSettings = {
   'performance_setting.monitor_disk_threshold': number
   'frontend_setting.download_url': string
   'frontend_setting.download_proxy': string
+  'frontend_setting.manifest_url': string
   'backend_setting.manifest_url': string
   'backend_setting.download_proxy': string
   'perf_metrics_setting.enabled': boolean

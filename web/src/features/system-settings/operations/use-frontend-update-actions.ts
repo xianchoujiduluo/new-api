@@ -23,7 +23,9 @@ import type { UseFormReturn } from 'react-hook-form'
 
 import {
   activateFrontend,
+  checkFrontendUpdate,
   discardFrontendDownload,
+  rollbackFrontendUpdate,
   startFrontendDownload,
 } from '../api'
 import { useUpdateOption } from '../hooks/use-update-option'
@@ -31,7 +33,7 @@ import type { FrontendFormValues } from './frontend-settings-fields'
 
 type FrontendUpdateActionsOptions = {
   form: UseFormReturn<FrontendFormValues>
-  defaults: { downloadUrl: string; downloadProxy: string }
+  defaults: { downloadUrl: string; downloadProxy: string; manifestUrl: string }
   refresh: () => Promise<void>
 }
 
@@ -48,6 +50,9 @@ export function useFrontendUpdateActions(
   const [starting, setStarting] = useState(false)
   const [activating, setActivating] = useState(false)
   const [discarding, setDiscarding] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [staging, setStaging] = useState(false)
+  const [latestCheckedVersion, setLatestCheckedVersion] = useState('')
 
   const reportError = (error: unknown, fallback: string) => {
     toast.error(error instanceof Error ? error.message : fallback)
@@ -56,12 +61,16 @@ export function useFrontendUpdateActions(
   const pendingUpdates = (values: FrontendFormValues) => {
     const downloadUrl = values.downloadUrl.trim()
     const downloadProxy = values.downloadProxy.trim()
+    const manifestUrl = values.manifestUrl.trim()
     return [
       ...(downloadUrl !== options.defaults.downloadUrl.trim()
         ? [{ key: 'frontend_setting.download_url', value: downloadUrl }]
         : []),
       ...(downloadProxy !== options.defaults.downloadProxy.trim()
         ? [{ key: 'frontend_setting.download_proxy', value: downloadProxy }]
+        : []),
+      ...(manifestUrl !== options.defaults.manifestUrl.trim()
+        ? [{ key: 'frontend_setting.manifest_url', value: manifestUrl }]
         : []),
     ]
   }
@@ -81,6 +90,7 @@ export function useFrontendUpdateActions(
     options.form.reset({
       downloadUrl: values.downloadUrl.trim(),
       downloadProxy: values.downloadProxy.trim(),
+      manifestUrl: values.manifestUrl.trim(),
     })
   }
 
@@ -89,6 +99,7 @@ export function useFrontendUpdateActions(
     const values = {
       downloadUrl: options.form.getValues('downloadUrl'),
       downloadProxy: options.form.getValues('downloadProxy'),
+      manifestUrl: options.form.getValues('manifestUrl'),
     }
     if (!values.downloadUrl.trim()) {
       toast.error(t('Configure a frontend archive URL first'))
@@ -145,14 +156,65 @@ export function useFrontendUpdateActions(
     }
   }
 
+  // Compares the live build with the published manifest.
+  const handleCheck = async () => {
+    setChecking(true)
+    try {
+      if (!(await applyUpdates(pendingUpdates(options.form.getValues())))) {
+        return
+      }
+      const response = await checkFrontendUpdate()
+      if (!response.success || !response.data) {
+        toast.error(response.message || t('Failed to check frontend updates'))
+        return
+      }
+      setLatestCheckedVersion(response.data.latest_version)
+      await options.refresh()
+      toast.success(
+        response.data.update_available
+          ? t('A frontend update is available')
+          : t('Frontend is up to date')
+      )
+    } catch (error) {
+      reportError(error, t('Failed to check frontend updates'))
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  // Stages the retired build; activation stays a separate explicit step.
+  const handleRollback = async () => {
+    setStaging(true)
+    try {
+      const response = await rollbackFrontendUpdate()
+      if (!response.success) {
+        toast.error(response.message || t('Frontend operation failed'))
+        return
+      }
+      toast.success(
+        t('Previous frontend staged. Activate it to go back.')
+      )
+      await options.refresh()
+    } catch (error) {
+      reportError(error, t('Frontend operation failed'))
+    } finally {
+      setStaging(false)
+    }
+  }
+
   return {
     starting,
     activating,
     discarding,
+    checking,
+    staging,
+    latestCheckedVersion,
     savingSettings: updateOption.isPending,
     handleSave,
     handleDownload,
     handleActivate,
     handleDiscard,
+    handleCheck,
+    handleRollback,
   }
 }

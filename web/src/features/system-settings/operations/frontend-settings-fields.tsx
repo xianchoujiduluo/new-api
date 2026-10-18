@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { Control } from 'react-hook-form'
 
+import { Combobox } from '@/components/ui/combobox'
 import {
   FormControl,
   FormDescription,
@@ -28,9 +29,12 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 
+import { useProxyEntries } from '../hooks/use-proxy-entries'
+
 export type FrontendFormValues = {
   downloadUrl: string
   downloadProxy: string
+  manifestUrl: string
 }
 
 type FrontendFieldProps = {
@@ -67,7 +71,37 @@ export function FrontendArchiveUrlField({ control, t }: FrontendFieldProps) {
   )
 }
 
+export function FrontendManifestUrlField({ control, t }: FrontendFieldProps) {
+  return (
+    <FormField
+      control={control}
+      name='manifestUrl'
+      render={({ field }) => (
+        <FormItem className='lg:col-span-2'>
+          <FormLabel>{t('Frontend manifest URL')}</FormLabel>
+          <FormControl>
+            <Input
+              type='url'
+              inputMode='url'
+              placeholder={t('Enter a frontend manifest URL')}
+              autoComplete='off'
+              {...field}
+            />
+          </FormControl>
+          <FormDescription>
+            {t(
+              'Reports the version and commit of the latest published frontend so update checks do not download the archive first.'
+            )}
+          </FormDescription>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  )
+}
+
 export function FrontendDownloadProxyField({ control, t }: FrontendFieldProps) {
+  const proxyEntries = useProxyEntries()
   return (
     <FormField
       control={control}
@@ -76,17 +110,21 @@ export function FrontendDownloadProxyField({ control, t }: FrontendFieldProps) {
         <FormItem className='lg:col-span-2'>
           <FormLabel>{t('Proxy Address')}</FormLabel>
           <FormControl>
-            <Input
-              type='text'
-              inputMode='url'
-              placeholder='http://127.0.0.1:7890'
-              autoComplete='off'
-              {...field}
+            <Combobox
+              allowCustomValue
+              options={proxyEntries.map((entry) => ({
+                value: entry.url,
+                label: `${entry.name} — ${entry.url}`,
+              }))}
+              value={field.value || ''}
+              onValueChange={(value) => field.onChange(value ?? '')}
+              placeholder={t('socks5://user:pass@host:port')}
+              searchPlaceholder={t('Search...')}
             />
           </FormControl>
           <FormDescription>
             {t(
-              'Optional proxy for frontend archive downloads. Leave empty to use direct access or HTTP_PROXY/HTTPS_PROXY.'
+              'Pick a shared proxy from the registry, or type a URL. Leave empty to use direct access or HTTP_PROXY/HTTPS_PROXY.'
             )}
           </FormDescription>
           <FormMessage />

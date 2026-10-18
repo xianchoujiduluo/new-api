@@ -22,7 +22,9 @@ import type {
   ConfirmPaymentComplianceResponse,
   BackendCheckResult,
   BackendDownloadJob,
+  FrontendCheckResult,
   FrontendDownloadJob,
+  FrontendUpdateStatus,
   BackendUpdateResponse,
   BackendUpdateResult,
   BackendUpdateStatus,
@@ -47,6 +49,33 @@ export async function getSystemOptions() {
 
 export async function updateSystemOption(request: UpdateOptionRequest) {
   const res = await api.put<UpdateOptionResponse>('/api/option/', request)
+  return res.data
+}
+
+export async function getFrontendUpdateStatus() {
+  const res = await api.get<BackendUpdateResponse<FrontendUpdateStatus>>(
+    '/api/frontend/status',
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+export async function checkFrontendUpdate() {
+  const res = await api.post<BackendUpdateResponse<FrontendCheckResult>>(
+    '/api/frontend/check',
+    undefined,
+    { skipBusinessError: true }
+  )
+  return res.data
+}
+
+/** Stages the retired frontend build; a separate activation is required. */
+export async function rollbackFrontendUpdate() {
+  const res = await api.post<BackendUpdateResponse<null>>(
+    '/api/frontend/rollback',
+    undefined,
+    { skipBusinessError: true }
+  )
   return res.data
 }
 

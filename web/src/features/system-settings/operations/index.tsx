@@ -58,6 +58,8 @@ const defaultOperationsSettings: OperationsSettings = {
   'performance_setting.monitor_disk_threshold': 95,
   'frontend_setting.download_url': '',
   'frontend_setting.download_proxy': '',
+  'frontend_setting.manifest_url':
+    'https://github.com/xianchoujiduluo/new-api/releases/download/latestFront/frontend-manifest.json',
   'backend_setting.manifest_url': '',
   'backend_setting.download_proxy': '',
   'perf_metrics_setting.enabled': true,

@@ -212,17 +212,32 @@ func (u *FrontendUpdater) reportStage(stage FrontendDownloadState, message strin
 	u.Reporter.Stage(stage, message)
 }
 
-func (u *FrontendUpdater) download(ctx context.Context, rawURL string) (string, error) {
+// ValidateFetchURL applies the configured SSRF policy to an outbound URL. It
+// is shared by archive downloads and manifest fetches.
+func (u *FrontendUpdater) ValidateFetchURL(rawURL string) error {
+	if u == nil || u.URLValidator == nil {
+		return nil
+	}
+	if err := u.URLValidator(rawURL); err != nil {
+		return fmt.Errorf("前端地址被安全策略拒绝: %w", err)
+	}
+	return nil
+}
+
+// httpClient returns the HTTP client used for frontend downloads and manifest
+// fetches: an injected client wins, otherwise the dedicated download proxy is
+// applied, otherwise the SSRF-protected default client is used.
+func (u *FrontendUpdater) httpClient() (*http.Client, error) {
 	client := u.Client
 	if client == nil {
 		if proxyURL := strings.TrimSpace(ConfiguredFrontendDownloadProxy()); proxyURL != "" {
 			if err := frontend_setting.ValidateDownloadProxy(proxyURL); err != nil {
-				return "", err
+				return nil, err
 			}
 			var err error
 			client, err = GetHttpClientWithProxy(proxyURL)
 			if err != nil {
-				return "", fmt.Errorf("创建前端下载代理客户端失败: %w", err)
+				return nil, fmt.Errorf("创建前端下载代理客户端失败: %w", err)
 			}
 		} else {
 			client = GetSSRFProtectedHTTPClient()
@@ -235,6 +250,14 @@ func (u *FrontendUpdater) download(ctx context.Context, rawURL string) (string, 
 		strictClient := *client
 		strictClient.CheckRedirect = checkProtectedFetchRedirect
 		client = &strictClient
+	}
+	return client, nil
+}
+
+func (u *FrontendUpdater) download(ctx context.Context, rawURL string) (string, error) {
+	client, err := u.httpClient()
+	if err != nil {
+		return "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -295,7 +318,7 @@ func activateFrontendDirectory(current, next string) error {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 			return fmt.Errorf("当前前端目录不是安全目录")
 		}
-		backup := current + ".previous"
+		backup := FrontendPreviousDir(current)
 		_ = os.RemoveAll(backup)
 		if err := os.Rename(current, backup); err != nil {
 			return fmt.Errorf("准备替换前端目录失败: %w", err)
@@ -304,9 +327,8 @@ func activateFrontendDirectory(current, next string) error {
 			_ = os.Rename(backup, current)
 			return fmt.Errorf("激活前端目录失败: %w", err)
 		}
-		if err := os.RemoveAll(backup); err != nil {
-			common.SysError(fmt.Sprintf("清理旧前端目录失败: %v", err))
-		}
+		// Keep the released directory as the rollback target. It is replaced on
+		// the next activation, so at most one previous build is retained.
 		return nil
 	}
 	if !os.IsNotExist(err) {

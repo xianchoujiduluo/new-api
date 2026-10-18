@@ -17,13 +17,23 @@ const DownloadURLOptionKey = "frontend_setting.download_url"
 // downloading the external frontend archive.
 const DownloadProxyOptionKey = "frontend_setting.download_proxy"
 
+// ManifestURLOptionKey is the persisted option containing the frontend
+// manifest URL. The update check reads it to learn the latest published build
+// without downloading the archive first.
+const ManifestURLOptionKey = "frontend_setting.manifest_url"
+
+// DefaultManifestURL points at the manifest published alongside the frontend
+// archive, so an update check works out of the box.
+const DefaultManifestURL = "https://github.com/xianchoujiduluo/new-api/releases/download/latestFront/frontend-manifest.json"
+
 // FrontendSetting contains settings for an externally published frontend.
 type FrontendSetting struct {
 	DownloadURL   string `json:"download_url"`
 	DownloadProxy string `json:"download_proxy"`
+	ManifestURL   string `json:"manifest_url"`
 }
 
-var frontendSetting = FrontendSetting{}
+var frontendSetting = FrontendSetting{ManifestURL: DefaultManifestURL}
 
 func init() {
 	config.GlobalConfig.Register("frontend_setting", &frontendSetting)
@@ -61,6 +71,26 @@ func ValidateDownloadURL(raw string) error {
 func ValidateDownloadProxy(raw string) error {
 	if _, err := common.ParseProxyURLStrict(strings.TrimSpace(raw)); err != nil {
 		return fmt.Errorf("前端下载代理无效: %w", err)
+	}
+	return nil
+}
+
+// ValidateManifestURL validates the frontend manifest URL format without
+// applying network policy; the fetch enforces SSRF and redirect rules again.
+func ValidateManifestURL(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parsed, err := url.ParseRequestURI(raw)
+	if err != nil {
+		return fmt.Errorf("前端更新清单地址无效: %w", err)
+	}
+	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return fmt.Errorf("前端更新清单地址必须使用 http 或 https 协议")
+	}
+	if parsed.User != nil {
+		return fmt.Errorf("前端更新清单地址不允许包含用户名或密码")
 	}
 	return nil
 }

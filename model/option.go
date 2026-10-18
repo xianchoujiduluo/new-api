@@ -250,6 +250,9 @@ func validateOptionValue(key string, value string) error {
 	if key == frontend_setting.DownloadProxyOptionKey {
 		return frontend_setting.ValidateDownloadProxy(value)
 	}
+	if key == frontend_setting.ManifestURLOptionKey {
+		return frontend_setting.ValidateManifestURL(value)
+	}
 	if key == operation_setting.ToolPriceOptionKey {
 		return operation_setting.ValidateToolPricesJSON(value)
 	}

@@ -234,9 +234,12 @@ func SetApiRouter(router *gin.Engine) {
 		frontendRoute := apiRouter.Group("/frontend")
 		frontendRoute.Use(middleware.RootAuth())
 		{
+			frontendRoute.GET("/status", controller.GetFrontendUpdateStatus)
+			frontendRoute.POST("/check", controller.CheckFrontendUpdate)
 			frontendRoute.POST("/download", controller.StartFrontendUpdateDownload)
 			frontendRoute.GET("/download", controller.GetFrontendUpdateDownload)
 			frontendRoute.POST("/activate", controller.ActivateFrontend)
+			frontendRoute.POST("/rollback", controller.StageFrontendRollback)
 			frontendRoute.DELETE("/staging", controller.DiscardFrontendUpdate)
 		}
 		backendRoute := apiRouter.Group("/backend-update")
