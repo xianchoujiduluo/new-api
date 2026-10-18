@@ -13,7 +13,6 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-contrib/gzip"
-	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 )
 
@@ -112,32 +111,38 @@ func SetWebRouter(router *gin.Engine, assets WebAssets, pluginDispatchers ...gin
 		externalRoot: frontendRoot,
 		embedded:     embeddedFS,
 	}
+	compress := gzip.Gzip(gzip.DefaultCompression)
 
 	noRouteHandlers := make([]gin.HandlerFunc, 0, 7)
 	noRouteHandlers = append(noRouteHandlers, pluginDispatchers...)
 	noRouteHandlers = append(noRouteHandlers,
 		middleware.RouteTag("web"),
-		gzip.Gzip(gzip.DefaultCompression),
-		middleware.AccessTokenAudit(),
-		middleware.GlobalWebRateLimit(),
-		middleware.Cache(),
-		static.Serve("/", frontendFS),
 		func(c *gin.Context) {
-		c.Set(middleware.RouteTagKey, "web")
-		if strings.HasPrefix(c.Request.RequestURI, "/v1") || strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/assets") {
-			controller.RelayNotFound(c)
-			return
-		}
-		c.Header("Cache-Control", "no-cache")
-		indexPage := assets.IndexPage
-		if service.ExternalFrontendEnabled() {
-			if externalIndexPath, ok := frontendFS.externalPath("/" + static.INDEX); ok {
-				if externalIndex, err := os.ReadFile(externalIndexPath); err == nil {
-					indexPage = externalIndex
+			// ServeFrontendFiles sends build files already compressed.
+			if !frontendFS.Exists("/", c.Request.URL.Path) {
+				compress(c)
+			}
+		},
+		middleware.AccessTokenAudit(),
+		middleware.GlobalWebRateLimit(frontendFS),
+		middleware.Cache(),
+		middleware.ServeFrontendFiles(frontendFS),
+		func(c *gin.Context) {
+			c.Set(middleware.RouteTagKey, "web")
+			if strings.HasPrefix(c.Request.RequestURI, "/v1") || strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/assets") {
+				controller.RelayNotFound(c)
+				return
+			}
+			c.Header("Cache-Control", "no-cache")
+			indexPage := assets.IndexPage
+			if service.ExternalFrontendEnabled() {
+				if externalIndexPath, ok := frontendFS.externalPath("/" + static.INDEX); ok {
+					if externalIndex, err := os.ReadFile(externalIndexPath); err == nil {
+						indexPage = externalIndex
+					}
 				}
 			}
-		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", indexPage)
+			c.Data(http.StatusOK, "text/html; charset=utf-8", indexPage)
 		},
 	)
 	router.NoRoute(noRouteHandlers...)

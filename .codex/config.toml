@@ -1,0 +1,42 @@
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
+enabled = true
+
+# 推荐配置：添加 Context7 API Key（可显著提高速率限制）
+[mcp_servers.context7.env]
+CONTEXT7_API_KEY = "ctx7sk-a25c3bac-7fb9-42c3-9baa-02e3a9dbe673"
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["-y", "chrome-devtools-mcp@latest", "&quot;--autoConnect","--browserUrl=http://172.16.30.4:9223"]
+enabled = true
+
+[mcp_servers.chrome-devtools.tools.take_screenshot]
+approval_mode = "approve"
+
+[mcp_servers.chrome-devtools.tools.take_snapshot]
+approval_mode = "approve"
+
+[mcp_servers.chrome-devtools.tools.click]
+approval_mode = "approve"
+
+[mcp_servers.chrome-devtools.tools.evaluate_script]
+approval_mode = "approve"
+
+[mcp_servers.chrome-devtools.tools.navigate_page]
+approval_mode = "approve"
+
+[mcp_servers.chrome-devtools.tools.press_key]
+approval_mode = "approve"
+
+[mcp_servers.chrome-devtools.tools.fill]
+approval_mode = "approve"
+
+[mcp_servers.chrome-devtools.tools.hover]
+approval_mode = "approve"
+
+[mcp_servers.chrome-devtools.tools.resize_page]
+approval_mode = "approve"
+
+[mcp_servers.chrome-devtools.tools.get_network_request]
+approval_mode = "approve"

@@ -42,10 +42,13 @@ import {
   FormControl,
   FormDescription,
   FormField,
+  FormItem,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+
+import { safeNumberFieldProps } from '../utils/numeric-field'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -87,6 +90,10 @@ import type { LogCleanupTask } from '../types'
 const logSettingsSchema = z.object({
   LogConsumeEnabled: z.boolean(),
   RecordPayloadEnabled: z.boolean(),
+  log_setting: z.object({
+    user_export_enabled: z.boolean(),
+    max_range_days: z.number().int().min(1),
+  }),
 })
 
 type LogSettingsFormValues = z.infer<typeof logSettingsSchema>
@@ -94,6 +101,10 @@ type LogSettingsFormValues = z.infer<typeof logSettingsSchema>
 type LogSettingsSectionProps = {
   defaultEnabled: boolean
   payloadRecordDefaultEnabled: boolean
+  logSettingDefaults: {
+    userExportEnabled: boolean
+    maxRangeDays: number
+  }
 }
 
 type ServerLogInfo = {
@@ -150,6 +161,7 @@ function isActiveLogCleanupTask(task: LogCleanupTask | null) {
 export function LogSettingsSection({
   defaultEnabled,
   payloadRecordDefaultEnabled,
+  logSettingDefaults,
 }: LogSettingsSectionProps) {
   const { t } = useTranslation()
   const { status } = useStatus()
@@ -161,6 +173,10 @@ export function LogSettingsSection({
     defaultValues: {
       LogConsumeEnabled: defaultEnabled,
       RecordPayloadEnabled: payloadRecordDefaultEnabled,
+      log_setting: {
+        user_export_enabled: logSettingDefaults.userExportEnabled,
+        max_range_days: logSettingDefaults.maxRangeDays,
+      },
     },
   })
 
@@ -191,8 +207,12 @@ export function LogSettingsSection({
     form.reset({
       LogConsumeEnabled: defaultEnabled,
       RecordPayloadEnabled: payloadRecordDefaultEnabled,
+      log_setting: {
+        user_export_enabled: logSettingDefaults.userExportEnabled,
+        max_range_days: logSettingDefaults.maxRangeDays,
+      },
     })
-  }, [defaultEnabled, payloadRecordDefaultEnabled, form])
+  }, [defaultEnabled, payloadRecordDefaultEnabled, logSettingDefaults, form])
 
   useEffect(() => {
     fetchServerLogInfo()
@@ -287,6 +307,21 @@ export function LogSettingsSection({
       await updateOption.mutateAsync({
         key: 'RecordPayloadEnabled',
         value: values.RecordPayloadEnabled,
+      })
+    }
+    if (
+      values.log_setting.user_export_enabled !==
+      logSettingDefaults.userExportEnabled
+    ) {
+      await updateOption.mutateAsync({
+        key: 'log_setting.user_export_enabled',
+        value: values.log_setting.user_export_enabled,
+      })
+    }
+    if (values.log_setting.max_range_days !== logSettingDefaults.maxRangeDays) {
+      await updateOption.mutateAsync({
+        key: 'log_setting.max_range_days',
+        value: values.log_setting.max_range_days,
       })
     }
   }
@@ -419,6 +454,54 @@ export function LogSettingsSection({
               )}
             />
           )}
+
+          <FormField
+            control={form.control}
+            name='log_setting.user_export_enabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Allow users to export logs')}</FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Users can download their own logs from the usage log page. Administrators can always export.'
+                    )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormMessage />
+              </SettingsSwitchItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='log_setting.max_range_days'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Longest log time range (days)')}</FormLabel>
+                <FormControl>
+                  <Input
+                    type='number'
+                    min={1}
+                    step={1}
+                    {...safeNumberFieldProps(field)}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'The longest time range a user can view at once in the logs and on the dashboard, and the longest range any export can cover.'
+                  )}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <SettingsControlGroup className='space-y-3'>
             <div>
