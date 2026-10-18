@@ -101,7 +101,6 @@ export interface ChannelOtherSettings {
   disable_store?: boolean
   auto_test_minutes_override?: number
   auto_test_enabled?: boolean
-  convert_responses_to_chat?: boolean
   allow_safety_identifier?: boolean
   allow_include_obfuscation?: boolean
   allow_inference_geo?: boolean

@@ -280,7 +280,6 @@ export const channelFormSchema = z
     auto_test_minutes_override: z.number().min(0).optional(),
     // 三态：inherit 跟随全局，on/off 覆盖全局且优先。
     auto_test_enabled: z.enum(['inherit', 'on', 'off']).optional(),
-    convert_responses_to_chat: z.boolean().optional(), // OpenAI only
     allow_safety_identifier: z.boolean().optional(), // OpenAI only
     allow_include_obfuscation: z.boolean().optional(), // OpenAI: include usage obfuscation
     allow_inference_geo: z.boolean().optional(), // OpenAI/Anthropic: inference geography
@@ -465,7 +464,6 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   disable_store: false,
   auto_test_minutes_override: 0,
   auto_test_enabled: 'inherit' as const,
-  convert_responses_to_chat: false,
   allow_safety_identifier: false,
   allow_include_obfuscation: false,
   allow_inference_geo: false,
@@ -536,7 +534,6 @@ export function transformChannelToFormDefaults(
   let disableStore = false
   let autoTestMinutesOverride = 0
   let autoTestEnabled: 'inherit' | 'on' | 'off' = 'inherit'
-  let convertResponsesToChat = false
   let allowSafetyIdentifier = false
   let allowIncludeObfuscation = false
   let allowInferenceGeo = false
@@ -565,7 +562,6 @@ export function transformChannelToFormDefaults(
       } else {
         autoTestEnabled = 'inherit'
       }
-      convertResponsesToChat = parsed.convert_responses_to_chat === true
       allowSafetyIdentifier = parsed.allow_safety_identifier === true
       allowIncludeObfuscation = parsed.allow_include_obfuscation === true
       allowInferenceGeo = parsed.allow_inference_geo === true
@@ -627,7 +623,6 @@ export function transformChannelToFormDefaults(
     disable_store: disableStore,
     auto_test_minutes_override: autoTestMinutesOverride,
     auto_test_enabled: autoTestEnabled,
-    convert_responses_to_chat: convertResponsesToChat,
     allow_include_obfuscation: allowIncludeObfuscation,
     allow_inference_geo: allowInferenceGeo,
     allow_speed: allowSpeed,
@@ -747,8 +742,6 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
 
   if (OPENAI_FIELD_PASSTHROUGH_TYPES.has(formData.type)) {
     settingsObj.disable_store = formData.disable_store === true
-    settingsObj.convert_responses_to_chat =
-      formData.convert_responses_to_chat === true
     settingsObj.allow_safety_identifier =
       formData.allow_safety_identifier === true
     settingsObj.allow_include_obfuscation =
@@ -756,9 +749,6 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
   } else {
     if ('disable_store' in settingsObj) {
       delete settingsObj.disable_store
-    }
-    if ('convert_responses_to_chat' in settingsObj) {
-      delete settingsObj.convert_responses_to_chat
     }
     if ('allow_safety_identifier' in settingsObj) {
       delete settingsObj.allow_safety_identifier
